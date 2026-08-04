@@ -28,7 +28,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 | 06 | [Infraestructura como Código](06-Infraestructura-como-Codigo.md) (+ [Apéndice A](06-Infraestructura-como-Codigo-Apendice-A.md)) | Terraform, CloudFormation |
 | 07 | [Observabilidad](07-Observabilidad.md) (+ [Apéndice A](07-Observabilidad-Apendice-A.md)) | OpenTelemetry, Prometheus, Distributed Tracing, RUM, alerting SRE |
 | 08 | [Seguridad](08-Seguridad.md) (+ [Apéndice A](08-Seguridad-Apendice-A.md)) | OAuth 2.1, JWT, OpenID Connect, IAM, mejores prácticas |
-| 09 | Diseño de APIs | REST, GraphQL, Webhooks, versionado, idempotencia |
+| 09 | [Diseño de APIs](09-Diseño-de-APIs.md) (+ [Apéndice A](09-Diseño-de-APIs-Apendice-A.md)) | REST, GraphQL, gRPC, Webhooks, versionado, idempotencia |
 | 10 | Escalabilidad y Resiliencia | Caching, Sharding, Replication, Circuit Breaker, Backpressure |
 | 11 | Patrones de Diseño | GoF y patrones de arquitectura empresarial |
 | 12 | CI/CD moderno | GitHub Actions, estrategias de despliegue |
