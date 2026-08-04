@@ -207,7 +207,7 @@ flowchart LR
     C2[Cliente v2024] --> GW
     GW --> T1[Transform v2017→2024]
     GW --> T2[Transform v2022→2024]
-    GW --> CORE[Servicio core (solo versión actual)]
+    GW --> CORE["Servicio core (solo versión actual)"]
     T1 --> CORE
     T2 --> CORE
     classDef aws fill:#FF9900,stroke:#232F3E,color:#fff;
