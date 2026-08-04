@@ -464,6 +464,19 @@ Don’t rely on Lambda to return CORS headers unless debug. Enable CORS in API G
 
 ---
 
+### Pattern: Model Gateway (capa de integración de modelos)
+
+Es la generalización del API Gateway cuando el backend consume uno o varios proveedores de IA (modelos auto-hospedados + APIs externas). Es un proxy centralizado que:
+
+- **Unifica la interfaz:** si cambia un modelo/API, se actualiza el gateway y no todas las aplicaciones que dependen de él.
+- **Centraliza acceso y coste:** en lugar de repartir credenciales de OpenAI/Anthropic, las aplicaciones acceden solo al gateway, que aplica control fino por aplicación y limita/monitoriza el uso (evita abuso y gestiona coste).
+- **Implementa fallback y resiliencia:** ante *rate limits* o fallos de una API, enruta a un modelo alternativo, reintenta o degrada sin cortar el servicio.
+- **Reutiliza la capa edge:** como todo pasa por él, es el lugar natural para logging, métricas, caching (exacto/semántico) y guardrails.
+
+En AWS se despliega como una Lambda/ECS detrás de API Gateway, o como un proxy adyacente, reutilizando el rate limiting, la auth (Módulo 08) y la observabilidad (Módulo 07) ya existentes en esta guía.
+
+> *"A model gateway is an intermediate layer that allows your organization to interface with different models in a unified and secure manner ... The gateway can also implement fallback policies to overcome rate limits or API failures."* — Chip Huyen, *AI Engineering*, Cap. 10 (AI Engineering Architecture and User Feedback).
+
 ## Casos Reales
 
 ### Caso 1: Migración de monolito a serverless en producción (E-commerce)
@@ -645,6 +658,7 @@ Compare standard workflow vs express:
 - **AWS — AWS Lambda Limits** — https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
 - **AWS — Getting started with Amazon Cognito** — https://docs.aws.amazon.com/cognito/latest/developerguide/getting-started.html
 - **"Serverless Architectures on AWS"** — Peter Sbarski (Manning). Libro de patrones serverless.
+- **"AI Engineering"** — Chip Huyen (O'Reilly, 2024). Cap. 10 (patrón *model gateway* en la capa de integración).
 - **YouTube — "AWS re:Invent Serverless" talks** — https://www.youtube.com/results?search_query=aws+reinvent+serverless+dynamodb
 
 ---

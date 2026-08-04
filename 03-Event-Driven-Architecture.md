@@ -92,6 +92,12 @@ def handler(event, context):
         mark_processed(dedup_id)
 ```
 
+#### El "problema del zombie" y los fencing tokens
+
+Figura que refina el exactly-once tras un *failover*: un **zombie** es un consumidor/lock-holder que perdió su lease pero aún no lo sabe y sigue actuando como si fuera el único. Sucede por una **pausa de proceso** (GC, VM suspendida) o por una respuesta **retrasada en la red** (puede tardar minutos en llegar tras el failover). Si dos nodos creen simultáneamente ser el líder/único procesador, tienes **split-brain** y riesgo de corromper datos. "Matar al otro nodo" (STONITH) no basta: no protege de las respuestas retrasadas que ya viajan por la red. La solución robusta es el **fencing token**: cada vez que el lock/lease se concede, el servicio de coordinación devuelve un número que se incrementa en cada concesión; el consumidor lo incluye en su escritura, y el storage **rechaza cualquier escritura con un token inferior al último visto**. El nodo zombie queda así *fenced off* y no puede inducir corrupción. (Nombres alternativos: sequencers en Chubby, epoch en Kafka, term en Raft.) Es el mecanismo real detrás de "solo una vez" cuando hay failover, más allá de la simple idempotencia.
+
+> *Fuente: DDIA, Cap. 9, § "Distributed Locks and Leases / Fencing off zombies and delayed requests".*
+
 ### 5. Event Ordering y Causality
 
 En distribuido no existe "tiempo global"; los relojes no son confiables. **Eventual consistency + eventos + orden** implica:
@@ -103,6 +109,12 @@ A veces el orden importa realmente (`OrderCreated` antes de `OrderFulfilled` del
 - Partition keys que agrupan eventos por entidad (`order_id`).
 - `SequenceNumber` por aggregate.
 - Buffering minimalista en consumidor (no intentes reordenar universo entero).
+
+#### Event time vs processing time (y los eventos rezagados / stragglers)
+
+En streams no basta con "tener orden": hay que distinguir **cuándo ocurrió el evento** (event time, el timestamp de negocio) de **cuándo lo procesa tu sistema** (processing time). Si agrupas/agregas por *processing time*, cualquier atraso (colas, un redeploy que bufferea el backlog, un reprocesamiento tras una caída) genera **artefactos**: p. ej., al reprocesar el backlog, la métrica de requests/seg parece tener un pico falso cuando en realidad el tráfico fue constante; confundir ambos produce datos malos. Además, el orden de llegada no garantiza el orden de *causalidad*: dos servidores pueden emitir eventos que llegan al broker en orden inverso (como ver Star Wars por fecha de estreno vs. por episodio). Con ventanas por *event time* aparece el problema de los **stragglers**: nunca sabes si ya llegaron todos los eventos de una ventana; las opciones son ignorarlos (midiendo cuánto descartas) o publicar una **corrección/retractación**. En eventos de móvil offline, el timestamp debió generarse en el dispositivo (reloj poco confiable); la práctica es loguear tres timestamps (device send / device recv / server recv) para estimar el offset.
+
+> *Fuente: DDIA, Cap. 12, §§ "Event time versus processing time" y "Handling straggler events".*
 
 ---
 

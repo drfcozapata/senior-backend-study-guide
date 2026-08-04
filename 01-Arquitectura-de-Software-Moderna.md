@@ -55,7 +55,11 @@ No son humor. Son ocho premisas falsas que causan _bugs y outages_ incontables. 
 7. **El costo de transporte es cero.** (Falso. Cross-AZ y cross-region traffic cuestan dinero.)
 8. **La red es homogénea.** (Falso, Múltiples protocolos, versiones, capacidades.)
 
-Cada una se corrige con patrones de esta guía: service discovery (Módulo 02), retries/idempotencia (Módulo 03), Configuration as Code (Módulo 06), distributed tracing (Módulo 07), encryption/auth (Módulo 08), encryption/auth (Módulo 08), rate limiting (Módulo 09), circuit breakers (Módulo 10).
+Cada una se corrige con patrones de esta guía: service discovery (Módulo 02), retries/idempotencia (Módulo 03), Configuration as Code (Módulo 06), distributed tracing (Módulo 07), encryption/auth (Módulo 08), rate limiting (Módulo 09), circuit breakers (Módulo 10).
+
+**El matiz de DDIA:** más allá de las 8 falacias, la mayoría de los fallos distribuidos se reduce a **tres fuentes recurrentes de problemas**: (1) **red no fiable**, (2) **relojes no fiables** y (3) **pausas de proceso**. Si no recibes respuesta de un nodo, es **imposible distinguir** si se perdió la petición, si el nodo cayó o si se perdió la respuesta; la red y los timeouts tienen _retrasos no acotados_ (un paquete puede tardar minutos), así que un timeout corto provoca falsos positivos y uno largo, esperas largas. Peor aún, un nodo **puede pausarse** (un GC "stop-the-world", una VM suspendida, un SIGSTOP, un page fault) durante segundos sin que su programa lo note: el resto del mundo puede declararlo muerto, y al despertar sigue actuando como líder o lock-holder con datos ya obsoletos. Por eso el reloj de pared no es fiable y se usan relojes monotónicos, leases y tokens de fencing. Exigir que el software funcione asumiendo estas tres cosas es lo que espera una entrevista senior de sistemas distribuidos.
+
+> _Fuente: DDIA, Cap. 9, §§ "Unreliable Networks", "Unreliable Clocks / Process Pauses", "Distributed Locks and Leases"._
 
 ### Atributos de Calidad (Quality Attributes / "-ilities")
 
@@ -73,6 +77,12 @@ No se habla de "código bonito". Se habla de satisfacer requisitos que stakehold
 | **Observability**                   | Entender estado interno desde las salidas (outputs)            | MTTD (Mean Time To Detect), tiempo de investigación de incidentes, cardinalidad de métricas                                                           | Observabilidad detallada vs costo de almacenamiento y muestreo (sampling) |
 | **Deployability / Releasability**   | Rapidez y seguridad de despliegue                              | Frecuencia de deploys, tiempo de entrega para los cambios (lead time for changes), tasa de fallos en los cambios (change failure rate) (DORA metrics) | Despliegue rápido vs rigor de validación                                  |
 
+#### Matiz senior: la amplificación de la cola (tail latency amplification)
+
+Un SLO de latencia no se mide con el promedio ni con p50: lo que degrada la experiencia real son los percentiles altos (p95, p99), conocidos como **tail latency**. El matiz que separa a un senior es entender la **amplificación de la cola**: cuando una petición dispara N llamadas internas (aunque sean en paralelo), el usuario espera por la **más lenta** de todas — basta UNA llamada lenta para que toda la petición sea lenta. Aunque solo un pequeño % de llamadas internas sea lento, la probabilidad de que una request toque al menos una llamada lenta crece con el número de llamadas que exige, de modo que la proporción de requests lentos se multiplica. Por eso importa más optimizar p99/p999 que la mediana, y por qué _promediar percentiles_ entre máquinas o a lo largo del tiempo es matemáticamente sin sentido: lo correcto es **agregar histogramas**, no medias.
+
+> _Fuente: DDIA (Designing Data-Intensive Applications, Kleppmann), Cap. 2, "Use of Response Time Metrics"._
+
 #### La compensación (trade-off) fundamental: los Atributos de Calidad no son gratuitos
 
 Ya veremos hasta el extremo de "escalabilidad imposible" en sistemas extremos. La clave que separa a un Senior de un Mid-Level en una entrevista es decir con claridad:
@@ -82,6 +92,24 @@ Ya veremos hasta el extremo de "escalabilidad imposible" en sistemas extremos. L
 3. **¿Cómo lo MIDO?** (Métricas reales, no "será rápido".)
 
 **Formación en empresas top:** Amazon, Netflix o Stripe no te preguntarán "¿sabes definir Availability?" sino "¿Dónde fallarías si le dieras a tus usuarios 99.9% pero tu base de datos está en una sola región?" o "Si un pago falla, ¿cómo comunicas el fallo a otro servicio causando idempotencia principal?". Eso es arquitectura moderna: pensar los trade-offs de RIESGO.
+
+**Dato senior (DORA):** el desacoplamiento y la desplegabilidad de la arquitectura son el **factor que más predice la velocidad y fiabilidad de entrega** (State of DevOps 2017: _"architecture was the largest contributor to continuous delivery"_). Un arquitecto no diseña solo para escala o mantenibilidad, sino **para que los equipos puedan testear, desplegar y revertir de forma independiente y segura**. Si la arquitectura permite _small changes_ que se despliegan solos sin coordinación global, obtienes velocidad y fiabilidad; si es un monolito sobreacoplado, cada cambio acarrea _global failures_ y coordinación de días. Migra de forma **incremental** (patrón _strangler fig_): no existe una arquitectura perfecta para todo producto y escala.
+
+> _Fuente: The DevOps Handbook (Kim, Humble, Debois, Willis, Forsgren), Cap. 13, "Architect for Low-risk Releases" (con la cita de DORA 2017)._
+
+#### El lente que añade la IA generativa a los trade-offs (avance Módulo 13)
+
+Cuando un componente del sistema es una llamada a un modelo de lenguaje (LLM), los trade-offs de **rendimiento y coste son de otra naturaleza** y un arquitecto debe saber enunciarlos:
+
+- **Coste proporcional a los tokens, no a las peticiones.** Las APIs de modelos cobran por token de entrada y salida: "reducir el prompt" y "acortar la salida" son decisiones de arquitectura de coste, no solo de UX.
+- **Latencia autorregresiva.** Un LLM genera _token a token_: cuanto más largo el output, mayor la latencia total. Las métricas relevantes dejan de ser p99/p95 del servicio y pasan a ser _time-to-first-token (TTFT)_ y _time-per-output-token (TPOT)_.
+- **Multiobjetivo (Pareto) calidad/latencia/coste.** No se optimiza "calidad máxima": se fija el atributo que no se puede sacrificar (p. ej. latencia), se descartan los modelos que no lo cumplen y se elige el mejor del resto.
+- **Online vs batch.** Las APIs "online" optimizan latencia; las "batch" optimizan coste (~50% más baratas) y sirven para trabajo asíncrono tolerante a horas de turnaround.
+- **Escala cambia el build-vs-buy.** En una API externa el coste por token apenas baja al escalar; al auto-hospedar, el coste marginal se abarata mucho con volumen, reabriendo la decisión a cierta escala.
+
+La lección: al diseñar un sistema que llama a modelos, enuncia explícitamente _tokens consumidos, TTFT, presupuesto de coste por request y si el camino es síncrono (latencia) o asíncrono (coste)_, igual que hoy enuncias RPS y p99.
+
+> _Fuente: Chip Huyen, AI Engineering, Caps. 4 (Cost and Latency) y 9 (Inference Optimization)._
 
 ### Principios de Diseño de Software (Foundations)
 
@@ -98,6 +126,20 @@ Aunque los detalles de clases pertenecen a lenguajes específicos, estos princip
 9. **Principios Lean:** minimizar los _residuos (waste)_ — no construir features que no se usan, no añadir capas extra que solo crean ceremonia.
 
 SOLID detallado está en Módulo 11 y se usa intensivamente en Módulo 03 (Event Sourcing/CQRS), Módulo 04 (Serverless), Módulo 05 (Persistencia Distribuida), Módulo 10 (Patrones de Resiliencia) y Módulo 12 (CI/CD).
+
+### Pensamiento basado en componentes (Component-Based Thinking)
+
+Un arquitecto no "ve" el sistema a nivel de clases, sino a nivel de **componentes lógicos**: las funciones mayores de negocio (inventario, envíos, pagos), representadas típicamente como _leaf nodes_ de la estructura de directorios o namespaces. Identificar y granular estos componentes es la base para elegir estilo, y se hace **de forma iterativa**, no "perfecto a la primera".
+
+**Cómo identificar los componentes iniciales:**
+
+- **Enfoque Workflow:** modela los _happy-path_ principales y crea un componente por paso (navegar catálogo → `Item Browser`; hacer pedido → `Order Placement`; pagar → `Order Payment`; notificar → `Customer Notification`). Pasos distintos pueden compartir componente.
+- **Enfoque Actor/Action:** si hay varios actores, identifica las acciones principales de cada uno (cliente, operario, y el propio sistema como actor automático: billing, reposición de stock) y asigna componentes a esas acciones.
+- **Evita el Entity Trap (antipatrón):** no derives componentes de _entidades_ ("Customer Manager", "Order Manager"). Sufijos como `Manager`, `Controller`, `Handler`, `Engine`, `Processor` delatan componentes "cajón de sastre"; prefiere nombres por _rol_: `Validate Order` dice más que `Order Manager`.
+
+**El ciclo de refinamiento (feedback loop que nunca se detiene):** (1) identifica componentes iniciales; (2) asigna user stories a cada uno; (3) analiza roles y responsabilidades — conectores como "y", "además", "también" delatan un componente que hace demasiado y lo separan en piezas más finas; (4) analiza las **architecture characteristics** — si una parte exige escalabilidad y otra solo 2 usuarios concurrentes, o requieren distinta consistencia/disponibilidad, ese contraste justifica _partir_ componentes que una visión puramente funcional mantendría juntos; (5) **reestructura** continuamente, en colaboración con los desarrolladores.
+
+> _Fuente: Richards & Ford, Fundamentals of Software Architecture (2nd ed.), Cap. 8, "Component-Based Thinking"._
 
 ---
 
@@ -715,6 +757,21 @@ Documenta cada decisión arquitectónica significativa:
 
 _(Plantilla completa en Apéndice A.)_
 
+### Architecture Quantum: la unidad desplegable
+
+Un criterio concreto para decidir _qué tan granular_ debe ser tu sistema y cuántos grupos de atributos debes soportar es el **architecture quantum**: la **pieza más pequeña del sistema que puede correr de forma independiente**, y que establece el _scope_ para un conjunto de architecture characteristics. Un quantum se define por:
+
+- **Despliegue independiente** del resto de la arquitectura.
+- **Alta cohesión funcional:** hace algo con propósito (idealmente alineado a un bounded context / workflow, no funcionalidad miscelánea).
+- **Bajo acoplamiento estático externo** de implementación.
+- **Comunicación síncrona** con otros quanta.
+
+**Intuición práctica:** si un monolito usa una **única base de datos compartida**, todos los componentes están _estáticamente acoplados_ a esa dependencia → forman **un solo quantum**. En microservicios, cada servicio con su propia DB crea **múltiples quanta**, cada uno con su propio scope de characteristics. Dos servicios que dependen del mismo componente o schema compartido siguen siendo parte del _mismo_ quantum, aunque sean desplegables por separado.
+
+**Cómo te ayuda a decidir:** parte el sistema por **clusters de architecture characteristics**, no por entidades. Si el sistema puede vivir con **un solo conjunto** de characteristics → monolito; si necesita **varios grupos** con características que se contraponen → distribución en quanta. Regla de oro del acoplamiento: _se permite más acoplamiento en alcances estrechos; cuanto más amplio el alcance, más suelto debe ser el acoplamiento._
+
+> _Fuente: Richards & Ford, Fundamentals of Software Architecture (2nd ed.), Cap. 7, "The Scope of Architectural Characteristics"._
+
 ### Tabla comparativa rápida
 
 | Criterio                       | Monolito Simple | Modular Monolith | Microservicios                | Serverless                |
@@ -732,6 +789,18 @@ _(Plantilla completa en Apéndice A.)_
 ---
 
 ## Cómo piensa un Software Architect
+
+### Las tres leyes de la arquitectura de software
+
+Antes de elegir cualquier estilo, internaliza las leyes que —según Richards & Ford— parecen universalmente ciertas:
+
+1. **Primera Ley: todo es un trade-off.** Nada vive en un espectro limpio; toda decisión sopesa muchas variables según el contexto. Si crees haber encontrado algo _sin_ trade-off, es que aún no lo has identificado (**corolario 1: missing trade-offs**). Ejemplo clásico: no puedes tener a la vez _fuerte desacoplamiento y alto reuso_, porque el reuso se implementa mediante acoplamiento. El mayor _missing trade-off_ oculto es el reuso: solo conviene cuando el código tiene buena **abstracción** y **baja volatilidad**; el dominio (lo que más cambia) es mal candidato a reutilizar.
+2. **Segunda Ley: el porqué importa más que el cómo (why is more important than how).** Cualquiera puede leer _cómo_ funciona un sistema; lo difícil es entender _por qué_ se decidió así. De ahí la razón de los ADRs: documentan el análisis de trade-offs, alternativas descartadas y concesiones, para no tener que reconstruir ese contexto.
+3. **Tercera Ley: la mayoría de decisiones no son binarias, sino que existen en un espectro entre extremos.** Rara vez es "monolito vs microservicios"; casi siempre es _cuánto_ distribuir, _cuánta_ consistencia, _cuánta_ autonomía.
+
+Corolarios para la mentalidad senior: **los trade-offs no se resuelven una vez y para siempre** (se re-evalúan en cada contexto porque las variables cambian), y el rol del arquitecto es ser un **árbitro objetivo de trade-offs**, no el evangelista de su solución favorita.
+
+> _Fuente: Richards & Ford, Fundamentals of Software Architecture (2nd ed.), Caps. 1 ("Laws of Software Architecture") y 27 ("The Laws of Software Architecture, Revisited")._
 
 ### La diferencia clave: Developer vs Architect
 
@@ -767,19 +836,19 @@ _(Plantilla completa en Apéndice A.)_
 
 1. **¿Cuándo usarías Monolito vs Microservicios?**
 
-   **Orientación:** El entrevistador quiere ver que no respondes con un mantra ("escalabilidad → microservicios"). Busca que evalúes *factores de decisión* y que conozcas el Modulith (Modular Monolith) como opción profesional. Habla de evolución, no de moda.
+   **Orientación:** El entrevistador quiere ver que no respondes con un mantra ("escalabilidad → microservicios"). Busca que evalúes _factores de decisión_ y que conozcas el Modulith (Modular Monolith) como opción profesional. Habla de evolución, no de moda.
 
-   **Respuesta de un senior:** "No decido por tamaño: decido por *volatilidad del cambio*. Si el dominio es maduro, el equipo pequeño y la consistencia crítica, un monolith bien modularizado me da velocidad con menos costo operativo. Me paso a microservicios cuando necesito desplegar de forma independiente, escalar subconjuntos por separado, o cuando el equipo crece y el acoplamiento entre módulos empieza a bloquear el delivery. Mi ruta típica es empezar con un Modular Monolith y descomponer *con intención*, midiendo cada vez (como hizo Netflix: empezó monolito y evolucionó deliberadamente). El costo operativo real de microservicios (red, consistencia, observabilidad, deploy) suele sorprender: nadie lo asume como el precio de la autonomía."
+   **Respuesta de un senior:** "No decido por tamaño: decido por _volatilidad del cambio_. Si el dominio es maduro, el equipo pequeño y la consistencia crítica, un monolith bien modularizado me da velocidad con menos costo operativo. Me paso a microservicios cuando necesito desplegar de forma independiente, escalar subconjuntos por separado, o cuando el equipo crece y el acoplamiento entre módulos empieza a bloquear el delivery. Mi ruta típica es empezar con un Modular Monolith y descomponer _con intención_, midiendo cada vez (como hizo Netflix: empezó monolito y evolucionó deliberadamente). El costo operativo real de microservicios (red, consistencia, observabilidad, deploy) suele sorprender: nadie lo asume como el precio de la autonomía."
 
 2. **¿Qué son Clean/Hexagonal/Onion Architecture y cuándo no aplican?**
 
-   **Orientación:** Demuestra que entiendes que son *variaciones del mismo axioma* (dominio al centro + dependency inversion), y que eres honesto sobre cuándo el costo ceremonial no se justifica.
+   **Orientación:** Demuestra que entiendes que son _variaciones del mismo axioma_ (dominio al centro + dependency inversion), y que eres honesto sobre cuándo el costo ceremonial no se justifica.
 
    **Respuesta de un senior:** "Clean, Hexagonal y Onion son tres dibujos del mismo principio: el dominio en el centro, sin dependencias hacia frameworks o infraestructura, y las dependencias siempre apuntando hacia adentro. Hexagonal habla de puertos y adaptadores; Onion de capas concéntricas; Clean de casos de uso. Donde sí me detengo: en una API CRUD trivial o un servicio de 2 endpoints, esa ceremonia es abstracción ilegítima. Aplico la arquitectura limpia cuando el dominio es rico y va a evolucionar, y aun así la simplifico al mínimo: el negocio aislado, los adapters finos, y solo lo que necesito hoy. El objetivo no es cumplir el diagrama, es que las reglas de negocio sean testables sin levantar infraestructura."
 
 3. **¿Qué es Architecture vs Design?**
 
-   **Orientación:** Quieren ver que diferencias la *forma* (arquitectura) de la *solución puntual* (design), idealmente con un ejemplo de tu experiencia.
+   **Orientación:** Quieren ver que diferencias la _forma_ (arquitectura) de la _solución puntual_ (design), idealmente con un ejemplo de tu experiencia.
 
    **Respuesta de un senior:** "Arquitectura son las decisiones difíciles de cambiar más adelante y que afectan al sistema como un todo: el modelo de datos, el estilo de comunicación entre servicios, dónde corre cada parte. Design es la decisión local y reversible: qué SDK usas para una llamada, qué estructura interna le das a una clase. Ejemplo real: en el proyecto X, elegir 'escribir directo al AWS SDK' era design (fácil de cambiar); decidir que toda la persistencia vive en DynamoDB y que los servicios se hablan por eventos, y que por tanto no hay llamadas síncronas de un servicio a otro, era arquitectura: cambiarla después significaba reescribir el sistema. Yo marco explícitamente cuáles decisiones son arquitectónicas en el ADR, porque son las que hay que revisar con más cuidado."
 
@@ -787,11 +856,11 @@ _(Plantilla completa en Apéndice A.)_
 
    **Orientación:** No solo listes atributos: da la métrica exacta, el umbral y cómo construiste la evidencia. Eso es lo que separa a un senior de un junior.
 
-   **Respuesta de un senior:** "Elijo cuatro: *Availability* (la mido con el SLI de uptime real sobre ventana deslizante, p. ej. 99.95%, y lo sigo con un SLO en Prometheus); *Scalability* (latencia p95 estable bajo Nx tráfico; lo pruebo con load tests y autoscaling basado en saturation); *Resilience* (probabilidad de degradación: inyecto fallos con chaos experiments y mido MTTF/MTTR); y *Observability* (tiempo de detección del problema, p. ej. p99 detection time < 5 min, y cobertura de instrumentación por feature). La clave: cada atributo tiene una métrica, un objetivo numérico y un mecanismo que lo está midiendo continuamente, no solo un slide."
+   **Respuesta de un senior:** "Elijo cuatro: _Availability_ (la mido con el SLI de uptime real sobre ventana deslizante, p. ej. 99.95%, y lo sigo con un SLO en Prometheus); _Scalability_ (latencia p95 estable bajo Nx tráfico; lo pruebo con load tests y autoscaling basado en saturation); _Resilience_ (probabilidad de degradación: inyecto fallos con chaos experiments y mido MTTF/MTTR); y _Observability_ (tiempo de detección del problema, p. ej. p99 detection time < 5 min, y cobertura de instrumentación por feature). La clave: cada atributo tiene una métrica, un objetivo numérico y un mecanismo que lo está midiendo continuamente, no solo un slide."
 
 5. **Menciona un trade-off duro en una decisión de proyecto.**
 
-   **Orientación:** El entrevistador busca una historia real donde *tuviste que sacrificar algo* y lo manejaste con intención. Evita el "todo perfecto".
+   **Orientación:** El entrevistador busca una historia real donde _tuviste que sacrificar algo_ y lo manejaste con intención. Evita el "todo perfecto".
 
    **Respuesta de un senior:** "En el proyecto de procesamiento de pedidos, prioricé Availability sobre Consistency: el pedido del cliente tenía que completarse siempre, aunque la confirmación de stock llegara después. Acepté que había un período de eventual consistency y lo convertí en un contrato explícito: el pedido se crea siempre, se publica un evento, y un proceso de reconciliación posterior (Outbox + worker) ajusta el stock y, si no hay stock, compensa con un reembolso. El trade-off real no fue técnico, fue de producto: le dije al negocio que 'pedido confirmado' pasaba a significar 'pedido aceptado, pendiente de stock', y ellos validaron esa semántica. Documenté la decisión en un ADR con las opciones descartadas y el porqué."
 
@@ -839,11 +908,14 @@ _(Plantilla completa en Apéndice A.)_
 
 ## Referencias y lecturas recomendadas
 
-- **"Fundamentals of Software Architecture"** — Mark Richards & Neal Ford (O'Reilly, 2020). El libro base de este módulo.
+- **"Fundamentals of Software Architecture"** — Mark Richards & Neal Ford (O'Reilly, 2020). El libro base de este módulo. (Caps. 1 y 27 "Laws of Software Architecture", Cap. 7 "Architecture Quantum", Cap. 8 "Component-Based Thinking".)
+- **"Designing Data-Intensive Applications"** — Martin Kleppmann (O'Reilly, 2017). Caps. 2 (tail latency) y 9 (fallos distribuidos: red, relojes, pausas).
 - **"Building Microservices"** — Sam Newman (O'Reilly, 2nd ed. 2021). Referencia para Módulo 02.
 - **"Domain-Driven Design"** — Eric Evans (Addison-Wesley, 2003). El "Blue Book" para Módulo 02.
 - **"Clean Architecture"** — Robert C. Martin (Prentice Hall, 2017).
 - **"The Mythical Man-Month"** — Frederick P. Brooks Jr. (1975). Clásico sobre complejidad y organización.
+- **"The DevOps Handbook"** — Kim, Humble, Debois, Willis, Forsgren (IT Revolution, 2021). Cap. 13 (arquitectura como predictor de continuous delivery).
+- **"AI Engineering"** — Chip Huyen (O'Reilly, 2024). Caps. 4 y 9 (lente de coste/latencia de LLMs en arquitectura).
 - **"Team Topologies"** — Matthew Skelton & Manuel Pais (IT Revolution, 2019). Conway's Law moderno.
 - **AWS Well-Architected Framework** — https://aws.amazon.com/architecture/well-architected/
 - **Martin Fowler's Architecture Section** — https://martinfowler.com/architecture/

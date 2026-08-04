@@ -67,7 +67,7 @@ Los equipos que "migran su ERD tal cual" fallan por esto:
 Una tabla DynamoDB se reparte en **particiones (shards) físicas**. Cada item se asigna a una partición calculando un **hash** de su partition key:
 
 ```
-partición = hash(PK) % número_de_canréteros
+partición = hash(PK) % número_de_caracteres
 ```
 
 - El **Partition Key** debe distribuir uniformemente el hash para que el tráfico se reparta entre particiones.
@@ -93,11 +93,17 @@ flowchart TD
     APP -->|"Query(PK=customer, SK begins_with ORDER#)"| S
 ```
 
+#### Sharding por rango vs por hash: por qué DynamoDB ordena solo dentro de una partición
+
+Existen dos familias de particionado. **Por rango de clave** (key-range: Bigtable/HBase, CockroachDB, opción de MongoDB): las keys se mantienen ordenadas y los rangos se asignan a cada shard; permite *range scans* eficientes sobre claves cercanas, pero si las escrituras caen sobre claves adyacentes (p. ej. un timestamp como PK), todas golpean el **mismo shard** → hot shard, mientras el resto queda ocioso. **Por hash de clave** (hash-range: DynamoDB, Cassandra, YugabyteDB): se aplica un hash para repartir uniformemente en shards, lo que *destruye el orden global* de las claves. Esa es la razón de fondo de por qué DynamoDB **no permite range queries globales** y solo ordena *dentro* de una misma partition key vía el Sort Key: el modelo gira alrededor de "acceso por clave conocida", no por escaneo. Además, DynamoDB subdivide de forma automática el espacio de hashes en shards y crea/mueve shards con la carga (a diferencia de `hash % N`, donde cambiar N obligaría a mover la mayoría de las claves — inviable).
+
+> *Fuente: DDIA, Cap. 7, §§ "Sharding by Key Range" y "Sharding by Hash of Key".*
+
 ### Hot partitions (El enemigo nº1)
 
 Una **hot partition** ocurre cuando una sola llave se llena de tráfico. Ejemplo típico:
 
-> Una tabla de "scores" de un juego viral con PK = `gameId`. En mess night, todos juegan a `game_id = "iyf-2026"` → miles de escrituras saltan sobre UNA partición (la del hash de esa clave). El resto queda ocioso. DynamoDB la limita (ThrottlingException / 400), aunque tu cuenta tenga millones de WCU libres.
+> Una tabla de "scores" de un juego viral con PK = `gameId`. En midnight, todos juegan a `game_id = "iyf-2026"` → miles de escrituras saltan sobre UNA partición (la del hash de esa clave). El resto queda ocioso. DynamoDB la limita (ThrottlingException / 400), aunque tu cuenta tenga millones de WCU libres.
 
 **Causas comunes:**
 - Keys globalmente populares (productos virales, cuentas de usuario mega-famoso).
@@ -105,9 +111,13 @@ Una **hot partition** ocurre cuando una sola llave se llena de tráfico. Ejemplo
 - TTL/borrado en masa de la misma partición.
 
 **Soluciones (pattern toolbox):**
-1. **Shuffle sharding / saturating the scope:** añadir un sufijo aleatorio o entidad (p.ej. `orderId#partition`). El orden global se pierde; réplica el dato en buckets paralelos (como las vecinas de DynamoDB).
+1. **Shuffle sharding / saturating the scope:** añadir un sufijo aleatorio o entidad (p.ej. `orderId#partition`). El orden global se pierde; réplica el dato en buckets paralelos (como las tablas de DynamoDB).
 2. **Write sharding:** dividir una key caliente en N sub-keys (`hot_0..hot_99`) y distribuir las escrituras; luego agregar en lectura.
 3. **Cambiar la PK por una compuesta** que dispersa (tenant + scope).
+
+**Matiz crítico del write-sharding (lo que DDIA aclara bien):** si a la clave caliente le añades un sufijo aleatorio —basta **2 dígitos aleatorios → hasta 100 claves**: `key#00..key#99`—, repartes las *escrituras* entre hasta 100 particiones. Pero cuidado: esto **NO reduce el volumen de lecturas por shard, solo la carga de escritura**, y cada *lectura* ahora debe **leer de las N claves y combinar** el resultado (en el cliente o con streams). Por eso conviene **solo para las pocas keys realmente calientes** (no para todas), y exige además trackear *cuáles* están shardeadas y un proceso para promocionar una key normal a hot key y revertirla cuando la viralidad baje. El balance `lectura-agregación` vs `escritura-distribuida` es la decisión senior: una viralidad se calma en días, así que no conviertas en hot key algo que no lo es.
+
+> *Fuente: DDIA, Cap. 7, § "Skewed Workloads and Relieving Hot Spots".*
 
 ### Sort Key y el patrón de diseño consolidado
 
@@ -138,6 +148,17 @@ Por [PACELC](00-Glosario.md) y predictibilidad:
 - **Lectura eventual (defecto):** lecturas pueden devolver versiones viejas. Cuesta **mitad de RCUs**.
 - **Lectura fuertemente consistente:** el dato leído es el último commiteado de la partición socia. Cuenta **2x RCUs**.
 - **Global Tables / DynamoDB Accelerator:** para multi-region (cross region replication) se usa Global Tables; para micro-latencia (`DD B`, 1ms) se usa DynamoDB Accelerator (DAX) como cache en front.
+
+#### La taxonomía real de "eventualmente consistente" (más allá de eventual vs fuerte)
+
+DDIA aclara que "eventually consistent" es vago: en la práctica hay garantías intermedias *más fuertes* que eventual y *más débiles* que fuerte, y una entrevista senior las menciona explícitamente:
+- **Read-your-writes (read-after-write):** tras escribir, el usuario que escribió SIEMPRE ve su propia escritura (p. ej. leyendo su perfil desde el líder). No promete nada sobre las escrituras de otros.
+- **Monotonic reads:** un mismo usuario que hace varias lecturas en secuencia **no ve el tiempo hacia atrás** (no lee datos más viejos después de haber leído datos más nuevos). Se logra hash-eando el `user_id` para rutear siempre a la misma réplica.
+- **Consistent prefix reads:** si una secuencia de escrituras tiene orden causal (A antes que B, "la pregunta antes de la respuesta"), cualquier lector las ve **en el mismo orden**; se viola con replicación asíncrona de distinta velocidad entre réplicas/shards.
+
+Estas tres garantías explican qué modelo necesitas según la UX (PPPK por usuario, rutear lecturas al líder, agrupar eventos causalmente) **sin** llegar a consistencia fuerte global.
+
+> *Fuente: DDIA, Cap. 6, § "Problems with Replication Lag" (read-your-writes, monotonic reads, consistent prefix reads).*
 
 **Trade-off práctico:** para datos transaccionales sensibles usa fuertemente consistente (ej. saldo); para feeds/aud logs usa eventual (barato y suficiente). Cuesta el doble: piénsalo en el modelado.
 

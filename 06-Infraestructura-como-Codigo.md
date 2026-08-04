@@ -366,6 +366,18 @@ Para aislar `dev/stage/prod`:
 - O **workspaces** por entorno + variables overhead.
 - Mejor práctica moderna: **una carpeta por entorno** con su propio `backend` (separación total de state → un fallo en dev no toca prod).
 
+### Paridad de entornos y el deployment pipeline (env parity + immutable)
+
+IaC no termina en "creo la infraestructura": el objetivo senior es que **el entorno completo sea reproducible desde version control y se despliegue como si fuera otro artefacto del código** — la pieza que conecta IaC con CI/CD (Módulo 12). Tres prácticas que todo diseñador de pipelines debe conocer de memoria:
+
+1. **Single source of truth para todo el sistema.** No solo el código de la app va a Git: también los scripts de packaging/deploy, las migraciones de esquema, los templates de cloud (CloudFormation/Terraform) y la configuración de la infra base. Así puedes **recrear todo el entorno de producción** a partir de lo que hay en version control, no solo el binario. (Suele haber órdenes de magnitud más opciones de configuración en el *entorno* que en el *código* — por eso el entorno debe estar en version control más que el propio código.)
+
+2. **Entornos efímeros y "easier to rebuild than to repair" (infraestructura inmutable).** Si puedes recrear el entorno on-demand desde código, ante un fallo *reconstruyes* (cattle) en lugar de *reparar* a mano (pets). Prohibir cambios manuales en producción y **matar/reemplazar instancias** elimina la variación de config y el drift. El estado y el drift vistos arriba son la cara operativa exacta de esta inmutabilidad.
+
+3. **Definición de "done" = corre en un entorno production-like.** El despliegue no se valida "en mi máquina": se considera *done* solo lo que se **construye, despliega y confirma que corre** en un entorno lo más parecido a producción (carga y dataset production-like), e idealmente con las mismas herramientas de monitorización/despliegue que prod. Esto detecta el grueso de los fallos de deploy mucho antes del release y es lo que hace que el pipeline sea seguro.
+
+> El *deployment pipeline* es la línea completa de valor desde code check-in hasta producción: todo en version control, entorno creado y despliegue automatizados, ejecución on-demand. Es aquí, no en un botón manual, donde el plan de Terraform y el apply de CloudFormation se vuelven *seguros y frecuentes*. *(Fuente: The DevOps Handbook, cap. 9, "Create the Foundations of Our Deployment Pipeline"; reforzado en The Phoenix Project, caps. 30–31.)*
+
 ### Testing de infraestructura
 
 - **Static:** tfsec/checkov + `terraform fmt` + `validate`.
@@ -522,6 +534,8 @@ Porta el ejemplo `modules/table` + dos entornos (dev/prod) usando la misma fuent
 - **"The Terraform Book"** — James Turnbull (LeanPub). Alternativa sólida.
 - **tfsec** (seguridad en HCL) — https://github.com/aquasecurity/tfsec y **Checkov** — https://www.checkov.io/ (policy-as-code).
 - **Terratest** — https://github.com/gruntwork-io/terratest (testing de infra con Go).
+- **"The DevOps Handbook"** — Kim, Humble, Debois, Willis, Forsgren. Cap. 9 (deployment pipeline, env parity, infraestructura inmutable).
+- **"The Phoenix Project"** — Gene Kim, Kevin Behr, George Spafford. Caps. 30–31 (la paridad de entornos y el objetivo de deploys frecuentes).
 
 ---
 
