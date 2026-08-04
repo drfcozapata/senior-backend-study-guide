@@ -765,32 +765,43 @@ _(Plantilla completa en Apéndice A.)_
 
 ### Preguntas habituales y cómo responder
 
-**"¿Cuándo usarías Monolito vs Microservicios?"**
+1. **¿Cuándo usarías Monolito vs Microservicios?**
 
-> Respuesta esperada: No digas solo "Escalabilidad → Microservicios; pequeño → Monolito". Analiza: cambio futuro, tamaño del equipo, volatilidad de dominio, necesidad de despliegue independiente, dificultad de consistencia entre servicios, costo operativo, expectativas de crecimiento. Menciona Modular Monolith como estándar profesional inteligente y aproximaciones empresariales (Netflix started monolith, evolved deliberately). Tu respuesta demuestra que piensas en _evolución, no moda_.
+   **Orientación:** El entrevistador quiere ver que no respondes con un mantra ("escalabilidad → microservicios"). Busca que evalúes *factores de decisión* y que conozcas el Modulith (Modular Monolith) como opción profesional. Habla de evolución, no de moda.
 
-**"¿Qué son Clean/Hexagonal/Onion Architecture y cuándo caducan?"**
+   **Respuesta de un senior:** "No decido por tamaño: decido por *volatilidad del cambio*. Si el dominio es maduro, el equipo pequeño y la consistencia crítica, un monolith bien modularizado me da velocidad con menos costo operativo. Me paso a microservicios cuando necesito desplegar de forma independiente, escalar subconjuntos por separado, o cuando el equipo crece y el acoplamiento entre módulos empieza a bloquear el delivery. Mi ruta típica es empezar con un Modular Monolith y descomponer *con intención*, midiendo cada vez (como hizo Netflix: empezó monolito y evolucionó deliberadamente). El costo operativo real de microservicios (red, consistencia, observabilidad, deploy) suele sorprender: nadie lo asume como el precio de la autonomía."
 
-> Confirma que son variaciones del mismo axioma: dominio al centro, dependency inversion. Explica que evitas abstracción ilegítima ("Clean Architecture Complex Enterprise Application, no for Todo API"), y da ejemplos de cuando el costo ceremonial supera el beneficio.
+2. **¿Qué son Clean/Hexagonal/Onion Architecture y cuándo no aplican?**
 
-**"¿Qué es Architecture vs Design?"**
+   **Orientación:** Demuestra que entiendes que son *variaciones del mismo axioma* (dominio al centro + dependency inversion), y que eres honesto sobre cuándo el costo ceremonial no se justifica.
 
-> Defínela y dale ejemplo concreto personal: "En el Proyecto X, elegir AWS SDK directamente sobre una abstracción era design; mover toda persistence a DynamoDB y communication model fue arquitectura".
+   **Respuesta de un senior:** "Clean, Hexagonal y Onion son tres dibujos del mismo principio: el dominio en el centro, sin dependencias hacia frameworks o infraestructura, y las dependencias siempre apuntando hacia adentro. Hexagonal habla de puertos y adaptadores; Onion de capas concéntricas; Clean de casos de uso. Donde sí me detengo: en una API CRUD trivial o un servicio de 2 endpoints, esa ceremonia es abstracción ilegítima. Aplico la arquitectura limpia cuando el dominio es rico y va a evolucionar, y aun así la simplifico al mínimo: el negocio aislado, los adapters finos, y solo lo que necesito hoy. El objetivo no es cumplir el diagrama, es que las reglas de negocio sean testables sin levantar infraestructura."
 
-**"Nombra algunos Quality Attributes y cómo medirlos."**
+3. **¿Qué es Architecture vs Design?**
 
-> Responde con 3–4 attributes (Availability, Scalability, Resilience, Deployability, Observability) con métricas exactas y cómo construiste evidencia.
+   **Orientación:** Quieren ver que diferencias la *forma* (arquitectura) de la *solución puntual* (design), idealmente con un ejemplo de tu experiencia.
 
-**"Menciona un trade-off duro en una decisión de proyecto."**
+   **Respuesta de un senior:** "Arquitectura son las decisiones difíciles de cambiar más adelante y que afectan al sistema como un todo: el modelo de datos, el estilo de comunicación entre servicios, dónde corre cada parte. Design es la decisión local y reversible: qué SDK usas para una llamada, qué estructura interna le das a una clase. Ejemplo real: en el proyecto X, elegir 'escribir directo al AWS SDK' era design (fácil de cambiar); decidir que toda la persistencia vive en DynamoDB y que los servicios se hablan por eventos, y que por tanto no hay llamadas síncronas de un servicio a otro, era arquitectura: cambiarla después significaba reescribir el sistema. Yo marco explícitamente cuáles decisiones son arquitectónicas en el ADR, porque son las que hay que revisar con más cuidado."
 
-> Cuento real: "Opté por Availability over Consistency porque el pedido del cliente debía completarse siempre, pero implementé reconciliation later con Outbox".
+4. **Nombra Quality Attributes y cómo los medirías.**
+
+   **Orientación:** No solo listes atributos: da la métrica exacta, el umbral y cómo construiste la evidencia. Eso es lo que separa a un senior de un junior.
+
+   **Respuesta de un senior:** "Elijo cuatro: *Availability* (la mido con el SLI de uptime real sobre ventana deslizante, p. ej. 99.95%, y lo sigo con un SLO en Prometheus); *Scalability* (latencia p95 estable bajo Nx tráfico; lo pruebo con load tests y autoscaling basado en saturation); *Resilience* (probabilidad de degradación: inyecto fallos con chaos experiments y mido MTTF/MTTR); y *Observability* (tiempo de detección del problema, p. ej. p99 detection time < 5 min, y cobertura de instrumentación por feature). La clave: cada atributo tiene una métrica, un objetivo numérico y un mecanismo que lo está midiendo continuamente, no solo un slide."
+
+5. **Menciona un trade-off duro en una decisión de proyecto.**
+
+   **Orientación:** El entrevistador busca una historia real donde *tuviste que sacrificar algo* y lo manejaste con intención. Evita el "todo perfecto".
+
+   **Respuesta de un senior:** "En el proyecto de procesamiento de pedidos, prioricé Availability sobre Consistency: el pedido del cliente tenía que completarse siempre, aunque la confirmación de stock llegara después. Acepté que había un período de eventual consistency y lo convertí en un contrato explícito: el pedido se crea siempre, se publica un evento, y un proceso de reconciliación posterior (Outbox + worker) ajusta el stock y, si no hay stock, compensa con un reembolso. El trade-off real no fue técnico, fue de producto: le dije al negocio que 'pedido confirmado' pasaba a significar 'pedido aceptado, pendiente de stock', y ellos validaron esa semántica. Documenté la decisión en un ADR con las opciones descartadas y el porqué."
 
 ### Anti-patrones que indican juniors
 
-- "Usamos Microservicios porque Amazon lo hace".
+- "Usamos Microservices porque Amazon lo hace".
 - "Quiero CQRS/Event Sourcing everywhere".
-- Carencia absoluta de medición.
-- Ignorar migration costs / organizational capacity.
+- Carencia absoluta de medición de atributos.
+- Ignorar migration costs y organizational capacity (Conway's Law).
+- Confundir "architectural decisions" con "preferences".
 
 ---
 

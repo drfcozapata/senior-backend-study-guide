@@ -557,44 +557,65 @@ Compare standard workflow vs express:
 
 ## Entrevistas
 
-1. **diference between HTTP API and REST API.**
+1. **Diferencia entre HTTP API y REST API en API Gateway.**
 
-   > HTTP is lower cost, lower feature set. For straightforward CRUD APIs open to public/lambda only, HTTP suficiente. REST si necesitas VTL, traditional usage plans, API keys management, request validation with models, or require direct integration with non-HTTP backend.
+   **Orientación:** Compara costo, funcionalidad y cuándo cada uno según el tipo de API y backend.
 
-2. **cold starts — how predict and fix.**
+   **Respuesta de un senior:** "HTTP API es más barato y con menor superficie de features, pensado para CRUD simple con backend Lambda o de servicio HTTP: suficiente integración, menos latencia y menos costo. REST API es el clásico con más features: soporta *mapping VTL* de requests/responses, *usage plans* y API keys para monetización, validación con modelos JSON, SDKs generados, y conexión directa con backends no-HTTP (por ejemplo, un Lambda que habla otro protocolo). Mi regla: si es una API pública/CRUD que solo necesita un proxy a Lambda, elijo HTTP API por costo y simplicidad; si necesito VTL, authorization compleja por method, planes de uso con API keys o integración con backends que no son HTTP, uso REST API. No es 'REST mejor que HTTP': es elegir la herramienta por lo que la API realmente necesita."
 
-   > Predict: CloudWatch `Init Duration`, high memory CPU-bound work, code bundling. Fix:捆包, SnapStart Java, provisioned concurrency for critical endpoint. NOTE: NOT for all functions — cost.
+2. **Cold starts: cómo predecirlos y mitigarlos.**
 
-3. **design an image processing service that scales.**
+   **Orientación:** Debes separar la predicción (Init Duration) de las mitigaciones, y el matiz de costo vs necesidad.
 
-   > API GW → SQS→Lambda with S3 put event. Deal with large files? S3 EventBridge direct event +Lambda hyperlink for download from pre-signed URL. Use SQS batching (10 messages) and error routing to DLQ. Include image metadata written to DynamoDB and start Step Fn post processing if multiple workers needed.
+   **Respuesta de un senior:** "El cold start es el tiempo que pasa desde que Lambda esculpe una nueva ejecución hasta que tu handler corre; se ve en CloudWatch como `Init Duration`. Lo *predigo* con eso, y conociendo qué carga: memoria baja con trabajo CPU-bound, o un bundle grande que tarda en deserializar, invitan a cold starts largos. Lo *mitigo* según cuándo el problema es real: (1) *Provisioned Concurrency* para los endpoints críticos que no pueden esperar, que mantiene ejecuciones tibias (tiene costo, así que NO lo aplico a todas las funciones); (2) *SnapStart* (Java) que persigue reducir el arranque de runtime y código; (3) reducir el bundle y lazy-load de imports para que el init sea más corto; (4) reservar una dotación de warm execution. Y aclaro el trade-off: optimizar el cold start de todo te cuesta dinero que no recuperas; lo reservo para el camino que el usuario percibe."
 
-4. **cost comparison: Lambda vs EC2 vs Fargate for 24/7 API with 2M req/day.**
+3. **Diseña un servicio de procesamiento de imágenes que escale.**
 
-   > Depends on runtime. Node at 100ms 512MB avg: ~$30/mo. Same on EC2 c6i.large: $70/mo + LB $18/mo. Lambda cheaper for variable bursty traffic. Recommendation likely Revision: Start Lambda→Fargate+ASG when traffic is predictable.
+   **Orientación:** Esperan event-driven con S3/SQS/Lambda, handle de archivos grandes, batching y DLQ.
 
-5. **DynamoDB vs Aurora Serverless v2 for lambda-based e-commerce.**
+   **Respuesta de un senior:** "Lo montaría totalmente serverless y event-driven: cuando se sube una imagen a S3, se emite un evento que encola trabajo. Para archivos grandes no subiría el binario por la API; usaría un *evento de S3 con URL pre-firmada* que la función descarga directamente desde S3, evitando cargar el payload por el gateway. El procesamiento va a una cola (SQS) que se *batchea* (máx. 10 mensajes por invocación) para eficiencia, y el error se ruta a una *DLQ*. Cada imagen genera metadatos que escribo a DynamoDB para consultar el estado y las URLs de salida. Si un solo worker no basta (thumbnails múltiples, vídeo), disparo un *Step Functions* que orquesta varias funciones en paralelo. Escala sin intervención porque cada componente es serverless y está desacoplado por la cola; solo cuido el DLQ y el monitoreo de la cola para ver atascos."
 
-   > DynamoDB: predictable low latency, no connection pool manage, HTTP for Lambda. Aurora Serverless: WHEN concurrent DB connections >10k (pooler issue), need relational queries impossible DDB (joinsanos complex), ACID multi-table transactions. Evaluate access patterns first (Module 05).
+4. **Coste: Lambda vs EC2 vs Fargate para una API 24/7 con ~2M requests/día.**
 
-6. **Step Functions vs custom orchestrator.**
+   **Orientación:** Buscan que hagas una comparación honesta de coste y cuándo la inversión está justificada.
 
-   > Built-in state management, retry handles, ASL declarative + visualization + metrics. Ideal when coordination > duration and complexity justifies declarative JSON overhead. Custom only for extreme throughput or proprietary simplicity.
+   **Respuesta de un senior:** "Para tráfico constante 24/7, Lambda no siempre es lo más barato. Hago la cuenta: ~2M requests/día con ~100 ms y 512 MB en Lambda, una estimación razonable ronda los ~30 USD/mes de ejecución. El mismo trabajo en un EC2 c6i.large (dos vCPU, 4GB) son ~70 USD/mes, más el load balancer (~18 USD/mes). Lamia gana cuando el tráfico es *esporádico o variable*: no pagas tiempo ocioso. Pero cuando la carga es predecible y constante, EC2/Fargate con ASG se vuelve más rentable y elimina el cold start. Mi recomendación honesta: empezar con Lambda por velocidad y under-utilización, y migrar a Fargate con ASG cuando el tráfico se estabilice y el coste de Lambda lo justifique. La decisión no es 'mejor tecnología', es dónde está el punto de corte de costo según el perfil de tráfico."
 
-7. **Cognito vs Auth0 vs build in-house.**
+5. **DynamoDB vs Aurora Serverless v2 para un e-commerce basado en Lambda.**
 
-   > Cognito: cheapest, native AWS IAM integration for access to other resources via Identity Pools, trigger based customization with Lambdas. Auth0: superior Management API, free for smallMAU, better social/enterprise integrations without custom work. Build in-house only if regulatory needs exclude SaaS IAM.
+   **Orientación:** Contrasta casos de uso: latencia predecible y sin conexiones con DynamoDB, contra consultas relacionales y ACID multi-tabla con Aurora.
 
-8. **Architecture change: Monolito to Serverless trade-offs.**
+   **Respuesta de un senior:** "Para la mayoría del catálogo y carrito de un e-commerce en Lambda elijo *DynamoDB*: latencia predecible en milisegundos, no gestiono connection pool (HTTP en vez de protocolo de base de datos), y escala sin operación. Respecto al lóbulo relacional: si necesito *queries relacionales complejas* (joins, reportes ad hoc) o *ACID multi-tabla* que DynamoDB resuelve mal, y el límite de conexiones concurrentes no es problema (>10K conexiones en el pico), *Aurora Serverless v2* encaja, porque escala la capacidad y se integra bien con Lambda aunque requiere gestionar el pool de conexiones (RDS Proxy). La decisión se toma antes por *access patterns*: defino cómo se lee y se escribe; si es por clave predecible → DynamoDB; si son joins y transacciones relacionales → Aurora. Nunca tomo la base de datos antes de modelar los patrones de acceso."
 
-   > Discuss Cold Start, connection pools to RDS, Observability, stateful session handling, long processes migration strategy, and cost variability (every request billed, not per-hour).
+6. **Step Functions vs orquestador a medida.**
 
-9. **exactly-once processing for payments via queues.**
+   **Orientación:** Buscan que hables de state management, retries, ASL declarativo y cuándo custom ganaría.
 
-   > Idempotency is key: at-least-once delivery from SQS, consumer-side dedup table, transaction isolated in single Lambda execution. Level: INTEGRACORS.
+   **Respuesta de un senior:** "Partiría casi siempre de *Step Functions* para orquestar flujos: me da *state management* gestionado (guarda el estado entre pasos sin que yo lo haga), *retry* y *timeout* configurados declarativamente en ASL, *checkpointing* que reanuda el flujo donde quedó, y visualización + métricas para operar. El JSON declarativo cuesta aprenderlo, pero se amortiza cuando la orquestación es un valor real. Solo considero un *orquestador a medida* en dos casos: throughput extremadamente alto, donde el overhead del state de Step Functions no escala, o una lógica tan propietaria y simple que no justifica el costo de adoptar DSL. Mi criterio: si la coordinación importa más que la duración, uso Step Functions; un custom box está justificado solo cuando cargo, simplicidad o control absoluto lo piden."
 
-10. **Debugging distributed serverless application basics.**
-    > X-Ray tracing activated, CloudWatch Logs Insights queries correlation, Payloads hidden by redaction policy, Observability Learn Lambda 2023.
+7. **Cognito vs Auth0 vs construir auth en casa.**
+
+   **Orientación:** Compara costo, integración con ecosistema AWS, API de gestión, y cuándo el build in-house se justifica.
+
+   **Respuesta de un senior:** "Elijo *Cognito* cuando estoy en AWS: es el más barato, se integra nativamente con IAM (Identity Pools) para dar permisos a recursos AWS, y permite personalización con triggers de Lambda (migración, pre-token, etc.) sin salir del ecosistema. *Auth0* gana en riqueza de Management API, integraciones social/enterprise listas sin trabajo custom, y experiencia de cliente, aunque cuesta más a partir de ciertos MAU. Construir auth *in-house* casi nunca lo recomiendo por el riesgo de seguridad (manejo de tokens, password hashing, MFA, sesiones), salvo que un requisito regulatorio me impida usar un SaaS de identidad o necesite operar del todo en mi propia infraestructura. La decisión entre Cognito y Auth0 es: máximo acople AWS-barato vs máximo feature-set-easy."
+
+8. **Migración Monolito → Serverless: trade-offs.**
+
+   **Orientación:** Debates cold start, pooling de conexiones a RDS, observabilidad, sesiones y coste variable.
+
+   **Respuesta de un senior:** "Migrar despacito y con intención. Los trade-offs que llamo: (1) *cold starts* en el camino crítico, que antes no existían; (2) *connection pooling* a bases relacionales, porque el número de ejecuciones puede disparar conexiones y ahogar el RDS (ahí RDS Proxy); (3) *observabilidad*: pago cada request y tengo más componentes, así que requiero tracing y logging estructurado antes de la migración; (4) *sesiones de estado*: en un serverless no guardas estado en el proceso, hay que llevar cualquier sesión a DynamoDB/Redis o token; y (5) *coste variable*: salgo de pagar por hora a pagar por request, lo que no siempre es predecible. La estrategia: extraer primero lo que más se beneficia (spikes, endpoints infrecuentes, batch), dejar el núcleo monolith hasta que el flujo esté probado, y no migrar lo que solo cambia de infraestructura sin valor."
+
+9. **Exactly-once para pagos vía cola.**
+
+   **Orientación:** Debes aterrizar el concepto de idempotencia + dedup a nivel de consumidor, y la ejecución aislada.
+
+   **Respuesta de un senior:** "El pago es el peor caso para duplicados, así que no confío en garantías del transporte. Asumo *at-least-once* de SQS y resuelvo *effectively once* en el consumidor con *idempotencia*: cada mensaje lleva una `dedupKey` (p. ej. el `paymentId`), y al procesarlo hago una escritura condicional—inserto el asiento solo si la clave no existe—de forma atómica en la misma transacción que el cobro. Proceso todo dentro de una *única ejecución de Lambda* para que la operación sea atómica frente a reintentos; si la ejecución muere a medio, cuando se reintenta, la dedupKey detecta que ya está aplicada y devuelve el resultado sin re-cobrar. No hago check-then-act (evito la condición de carrera). El resultado: aunque el broker reintente, el cliente se cobra exactamente una vez."
+
+10. **Debuggear una aplicación serverless distribuida.**
+
+    **Orientación:** Esperan correlación de logs, tracing distribuido y redacción de datos sensibles.
+
+    **Respuesta de un senior:** "Para debuggear un problema serverless distribuido no miro un solo log: correlaciono. Activo *X-Ray* para distributed tracing, de modo que cada request tracea sus spans a través de API Gateway → Lambda → DynamoDB/SQS y veo dónde está la latencia o el fallo. Uso *CloudWatch Logs Insights* con queries para correlacionar por `requestId` o `traceId` a través de las funciones, filtrando con tiempo. Y verifico que el logging estructurado incluya `requestId`/`correlationId` en cada mensaje, para saltar de un evento al siguiente sin saltos. Cuido la *redacción* de datos sensibles: aplico políticas de redacción para no loguear card numbers, password, tokens. Mi flujo: localizar el trace con X-Ray, abrir los logs de ese trace con Insights, y confirmar la causa, con observabilidad como requisito previo (nunca añadida después de un incidente)."
 
 ---
 

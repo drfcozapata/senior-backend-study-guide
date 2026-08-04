@@ -432,34 +432,64 @@ Porta el ejemplo `modules/table` + dos entornos (dev/prod) usando la misma fuent
 ## Entrevistas
 
 1. **Terraform vs CloudFormation: ¿cuál elijes y por qué?**
-   > Argumentar según context: multi-cloud/portabilidad/estado explícito prefieren Terraform. 100% AWS + serverless + rollback atómico para CFN/SAM/CDK. Resalta el trade-off de estado/ecosistema más que la preferencia personal.
+
+   **Orientación:** Argumenta *según contexto*, no por preferencia personal. Muestra que entiendes el trade-off de estado, ecosistema y rollback.
+
+   **Respuesta de un senior:** "La elección depende del contexto, no de la moda. Para *multi-cloud* o portabilidad, elijo *Terraform*: un solo lenguaje (HCL) y un modelo de estado explícito que no te ata a AWS, con un enorme ecosistema de providers. Para un equipo *100% AWS* que usa *serverless*, recomiendo *CloudFormation* (y por encima *SAM*/*CDK*): es nativo, el estado lo gestiona AWS, y tiene *rollback atómico por stack* que Terraform no te da de fábrica. El trade-off real que señalo no es 'mi herramienta favorita': es qué gestión de estado y qué nivel de control quieres. Terraform te da control fino y estado manejable pero hay que cuidar el backend y el locking; CloudFormation te simplifica la vida dentro de AWS pero es verboso y menos portable. A veces uso ambos: CFN/SAM para serverless y Terraform para la capa multi-cloud."
 
 2. **¿Qué es exactamente el estado de Terraform y cómo lo proteges?**
-   > Mapea IDs con bloques; repositorio central. Remoto S3/DynamoDB locking + backup + `-state`/`-backend-config`. Si se pierde, recursos huérfanos.
+
+   **Orientación:** Debes explicar que el estado mapea recursos reales con los bloques, y la seguridad del backend remoto.
+
+   **Respuesta de un senior:** "El estado de Terraform es el *mapa* entre lo que declaré en HCL y los recursos reales que existen en la nube: guarda los IDs y atributos. Con él, `plan` sabe qué crear, cambiar o destruir. Como es el corazón del proceso, lo *protejo*: nunca lo guardo local ni lo comiteo, lo pongo en un *backend remoto* —S3 con *versioning y encriptación* más *locking* vía DynamoDB o Terraform Cloud— y lo separo por entorno/workspace con `-backend-config`. Importante: si lo pierdes, dejarías recursos *huérfanos* —existen pero Terraform ya no los conoce—, por eso backup y versioning son obligatorios. La regla senior: el estado es un artefacto sensible (contiene secretos y referencias), se trata como un recurso auditado y siempre remoto."
 
 3. **¿Cómo manejas el bloqueo de estado y la concurrencia?**
-   > DynamoDB lock (o Terraform Cloud). Intento de apply simultáneo → bloquea y espera; huérfanos → `force-unlock`.
+
+   **Orientación:** Explica el lock (DynamoDB/Terraform Cloud), que bloquea y espera, y el force-unlock solo cuando es seguro.
+
+   **Respuesta de un senior:** "El backend remoto gestiona un *lock*: cuando corre `apply`, se toma un bloqueo (en DynamoDB o en Terraform Cloud) para que dos applies simultáneos no corrompan el estado. Si otro proceso intenta aplicar, *bloquea y espera* ('holding state lock') hasta que el primero libere, o falla si el lock está tomado. Es esencial porque dos writes concurrentes al estado romperían el mapeo. Si un proceso murió y dejó el lock *colgado* (stale), hago `terraform force-unlock <id>` solo *después* de verificar que ningún apply activo está corriendo, porque forzar con algo en ejecución podría sobrescribir estado. Mejor prevención: los pipelines centralizan la ejecución (CI + cola), así la concurrencia accidental es rara; el lock es la red de seguridad."
 
 4. **¿Cómo detectas y solucionas el drift?**
-   > `terraform plan` muestra diff; detective guía. `ignore_changes` para cambios legítimos por job manual. CloudFormation Drift Detection + stack theory policy.
+
+   **Orientación:** Define drift y cómo detectarlo (plan/detect), distinguir cambios legítimos vs accidentales, y `ignore_changes`.
+
+   **Respuesta de un senior:** "El *drift* es cuando el estado real de la nube difiere de lo que el código declaró —alguien tocó el recurso a mano, en la consola o por otro tool. Lo detecto con `terraform plan`, que computa la desviación; en CloudFormation uso *Drift Detection* por stack, que marca si los recursos del stack divergen de la plantilla. Para solucionarlo, distingo la causa: si el cambio es *legítimo* (p. ej. algo que un job otra herramienta mantiene y no debe controlar Terraform), lo declaro con `ignore_changes` para que deje de marcarse como drift; si es *accidental* o indeseado, `apply` revierte hacia el estado declarado. La clave senior es no borrar drift a ciegas: tengo un pipeline y *alarmas de drift* para enterarme pronto, y policy para impedir que se `apply`e algo que no está aprobado."
 
 5. **Diseña un flujo IaC para un equipo pequeño serverless.**
-   > Repo por producto, backend remoto, workspaces/folders por entorno, plan en PR de CI, apply solo en merge a main con approval, policy-as-code, drift alertas.
 
-6. **Diferencias entre SAM y CFN simple.**
-   > SAM → serverless helper (concisión de funciones, tabla, API): genera CloudFormation. CFN plano → más control pero más verboso; SAM es CFN for serverless.
+   **Orientación:** Buscan un repo por producto, backend remoto, entornos, plan en PR, apply en main con approval, policy-as-code y drift.
+
+   **Respuesta de un senior:** "Para un equipo serverless pequeño, un flujo pragmático y seguro: un *repo por producto* con el código y su infraestructura juntos. *Backend remoto* (S3 + locking) separado por entorno. Uso *folders/workspaces* por entorno (dev, stage, prod). El *CI* corre `fmt`, `validate`, `plan` en cada *PR* y comenta el plan para revisión; el *apply* solo ocurre al fusionar a `main` y *con approval* manual para entornos pre-prod/prod. Añado *policy-as-code* (tfsec/checkov) para bloquear configuraciones inseguras antes del plan, y *alarmas de drift* para detectar desviaciones. Todo *automatizado*: nadie aplica manualmente infraestructura fuera del pipeline. Es el punto justo entre velocidad (un solo repo) y seguridad (plan en PR, approval, policy) para no abrumar a un equipo chico con procesos pesados."
+
+6. **Diferencias entre SAM y CloudFormation simple.**
+
+   **Orientación:** Clarifica que SAM es un *abreviador serverless* que genera CloudFormation.
+
+   **Respuesta de un senior:** "SAM (Serverless Application Model) es una *capa de sintaxis* sobre CloudFormation pensada para serverless: en lugar de definir verbosamente cada Lambda, API Gateway, DynamoDB y su función-IAM, escribe una *definición compacta* (`Function`, `Api`, `Table`) y SAM *genera* el CloudFormation equivalente al build. Te da conveniencias además: `sam local` para probar localmente, SimpleTable, transform que autocompleta la infraestructura. CloudFormation *complejo* te da control total y explícito, pero es más verboso: defines letra a letra cada recurso, sus políticas y su IAM. Mi regla: si es serverless (funciones + API + eventos), SAM; si tengo infraestructura general (VPC, redes, EC2, multi-account) que no es solo funciones, CloudFormation plano. SAM *es* CloudFormation por debajo, así que no compites, se complementan."
 
 7. **¿Cómo haces el rollback en infraestructura?**
-   > CFN: automático por stack. Terraform: no automático → por plan/reapply, `target`, y `create_before_destroy` (blue/green).
 
-8. **¿Cómo evidenciás que un cambio de infra no rompe?**
-   > Plan en PR + Terratest (apply real momentáneo) + policy-as-code + escaneo de drift. Todos automatizados en CI.
+   **Orientación:** Contrasta el rollback automático de CloudFormation con el manual de Terraform (`plan/reapply`, `target`, `create_before_destroy`).
+
+   **Respuesta de un senior:** "En *CloudFormation* el rollback es casi automático: cada *stack* es atómico, y si un deploy falla, CFN *revierte* los cambios del stack a su estado anterior (o al stack anidado que corresponda). En *Terraform* no hay rollback automático: la estrategia es re-ejecutar el *plan/reapply* apuntando a la versión anterior del code, a veces con `-target` para acotar qué recurso toco primero. Para evitar idas y venidas uso *`create_before_destroy`* (o *blue/green*): creo el recurso nuevo antes de borrar el viejo, de modo que si el nuevo falla, el anterior sigue vivo y puedo volver sin downtime real. En el pipeline, esto se combina con *feature toggles*: si un deploy introduce un bug, apago el toggle en vez de hacer un rollback costoso de infraestructura. La regla: minimizo la ventana de riesgo con blue/green y vuelvo rápido."
+
+8. **¿Cómo evidencias que un cambio de infraestructura no rompe?**
+
+   **Orientación:** Esperan plan en PR, Terratest, policy-as-code y detección de drift, todo en CI.
+
+   **Respuesta de un senior:** "Montaría una cadena de verificación automatizada antes de tocar prod. (1) *plan en la PR*: el `terraform plan` se comentó para que el revisor vea el impacto exacto. (2) *Terratest* (o testing de infra): un test que crea la infraestructura en un entorno efímero de verdad, verifica el comportamiento (p. ej. que la Lambda responde, que el bucket acepta escrituras) y la destruye, probando el estado real, no solo la sintaxis. (3) *policy-as-code*: tfsec/checkov bloquean reglas inseguras antes de planificar. (4) *detección de drift*: para detectar que la realidad se desvió del estado declarado. Todo corre en el *CI* con gates: si el plan muestra cambios destructivos o el policy scanner falla, la PR no avanza. Así evidencia con datos que un cambio no rompe, no es una promesa."
 
 9. **Protege una base con datos de la destrucción.**
-   > `prevent_destroy` (Terraform), `DeletionPolicy: Retain` (CFN) y backups. Explica compоз Todos los puntos de confirmación manual en prod.
 
-10. **¿State isolation: workspaces vs folders.**
-    > Folders: state totalmente separado + menos riesgo de error; workspaces: conveniente para dev entornos ad hoc pero stage shared puede confundirse. Recomendar folders separadas por entorno de prod.
+   **Orientación:** Debes cubrir protección declarativa (prevent_destroy / DeletionPolicy Retain) + backups + confirmation manual.
+
+   **Respuesta de un senior:** "Primero, protección a nivel de definición: en Terraform `prevent_destroy = true` en el recurso de base de datos, para que `terraform destroy` falle si intenta eliminarla; en CloudFormation, `DeletionPolicy: Retain` hace que, incluso si el stack se borra, el recurso y sus datos *permanezcan*. Añado *backups* reales: snapshots/RDS automated backups o PITR en DynamoDB, ya que la protección declarativa evita borrarla, pero no un fallo de datos o un borrado manual fuera de IaC. Y en el *pipeline* exijo *confirmación manual* en prod: no basta el approve automático, una persona confirma antes de cualquier operación destructiva sobre datos. La triple capa —protección declarativa, backups, confirmación humana— es lo que hace que 'nunca se pierda la base' deje de ser un deseo y sea una garantía operativa."
+
+10. **State isolation: workspaces vs folders.**
+
+    **Orientación:** Explica cuándo conviene cada uno; folders = aislamiento total, workspaces = conveniencia con riesgo.
+
+    **Respuesta de un senior:** "Ambos aíslan el estado, pero ofrecen distinto nivel de riesgo. Con *folders* (una carpeta por entorno con su propio backend config), el estado de cada entorno está *totalmente separado*: lo que pasa en dev no toca prod, y el riesgo de error entre entornos es mínimo; es la opción que recomiendo para entornos *productivos* y equipos que comparten infraestructura. Con *workspaces* (una sola configuración con `terraform.workspace` diferenciando) es más *conveniente*: una sola codebase, y útil para entornos *ad hoc* de desarrollo, pero introduce riesgo: al compartir código y ocultar el estado, un `apply` descuidado con el workspace equivocado puede afectar al stage/otros. Mi recomendación senior: *folders separados* para dev/stage/prod (aislamiento real), y workspaces solo cuando quiero entornos temporales o experimentales donde el aislamiento estricto no es crítico. La separación es más importante que la comodidad."
 
 ---
 

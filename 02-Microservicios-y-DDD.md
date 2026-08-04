@@ -605,16 +605,65 @@ Con Pact, crea un test que falle: `OrderService` espera `items.priceCents` en la
 
 ## Entrevistas (preguntas y respuestas)
 
-1. **¿Diferencia entre SOA y Microservices?** Ownership, ESB, granularidad, ownership de datos.
-2. **¿Cuándo no usar microservicios?** Latencia, equipo pequeño, mono crítico ACID, baja frecuencia de cambio.
-3. **Explica Bounded Context** Definición, shared kernel, aggregate mapping.
-4. **Conocences de Conway's Law** Arquitectural refleja org chart; cambiar arquitectura requiere se primero estructura del org.
-5. **¿Cómo manejar transacciones distribuidas?** Saga (orchestrated vs choreography), Outbox, trade-off de consistencia.
-6. **Diseña el sistema de dispatch de Uber.** Escala, geo-index (Redis geospatial), two services (location pool + matching), eventos de trip.
-7. **Critica: shared DB entre 3 servicios.** Enddisplays verify cougpling, schema conflicts, no autonomy.
-8. **Desventajas de Saga orchestrated** Compensación compleja, races de status, orquestador bottleneck.
-9. **¿Cómo secure la comunicación inter-servicios?** mTLS + OAuth Client Credentials; Zero Trust.
-10. **Define SLO vs SLA.** SLI que lo mide, error budget vs release.
+1. **¿Diferencia entre SOA y Microservices?**
+
+   **Orientación:** Buscan que distingas *ownership* y *granularidad* por encima del ESB. Evita decir que son lo mismo.
+
+   **Respuesta de un senior:** "SOA insistía en la separación de responsabilidades *empresariales* y casi siempre aterrizaba en un ESB que centralizaba la integración: ese bus se convertía en el monolito oculto, el punto único de fallo y el cuello de botella. Microservices son un refinamiento: servicios pequeños, autónomos, con *ownership de sus datos y de su despliegue*, que se comunican por API/eventos sin intermediario pesado. La diferencia práctica que me importa es el ownership: en SOA reutilizabas servicios como cajas compartidas; en microservicios cada equipo es dueño de extremo a extremo y no comparte base de datos. La granularidad, además, se decide por bounded context, no por un bus."
+
+2. **¿Cuándo NO usarías microservicios?**
+
+   **Orientación:** Quieren honestidad y ausencia de dogmatismo. Piensa en latencia, tamaño de equipo, consistencia y frecuencia de cambio.
+
+   **Respuesta de un senior:** "No los usaría cuando el costo supera el beneficio: (1) latencia crítica punto a punto, donde cada salto de red penaliza y prefiero un monolith; (2) equipo pequeño sin capacidad de mantener N servicios con su observabilidad y deploy; (3) dominio con transacciones ACID multi-agregado críticas, donde fragmentarlo obliga a sagas complejas sin ganancia real; y (4) dominio que apenas cambia, porque la complejidad operativa no se amortiza. Para esos casos, un Modular Monolith o servicios grandes por bounded context me da la cohesión con menos dolor. Descomponer 'porque sí' crea problemas de consistencia, red y operación que no tenías."
+
+3. **Explica Bounded Context.**
+
+   **Orientación:** Demuestra que es el corazón de DDD y cómo define límites de modelo y de servicio. Menciona Shared Kernel y mapeo de agregados.
+
+   **Respuesta de un senior:** "Un Bounded Context es la frontera donde un término tiene un significado único y no ambiguo. 'Pedido' en el contexto de *comercio* significa una cosa; en el de *logística* significa otra. Cada contexto tiene su propio modelo, su propio lenguaje ubicuo y su propia base de datos: no lo compartes con otros contextos. Esto es lo que permite que dos equipos usen 'producto' con significados distintos sin pelearse. Dentro de un contexto trabajas con Aggregates; entre contextos definimos contracts de integración, a veces con un Shared Kernel (un conjunto reducido compartido y versionado). El Bounded Context es, en la práctica, el candidato natural a servicio."
+
+4. **¿Conoces la Ley de Conway? ¿Cómo la uses?**
+
+   **Orientación:** Quieren ver que entiendes que la arquitectura refleja la organización y que la cambias con intención organizacional.
+
+   **Respuesta de un senior:** "La Ley de Conway dice que los sistemas tienden a imitar la estructura de comunicación de la organización que los diseña. Si tienes dos equipos que necesitan coordinarse constantemente, producirás un sistema con fuerte acoplamiento entre sus partes. Yo la uso como herramienta, no como fatalidad: antes de definir servicios, defino el team topology según bounded contexts y dejo que cada equipo sea dueño de su parte; si quiero una arquitectura desacoplada, primero desacoplo la organización y la comunicación. El reverse Conway maneuver es literalmente diseñar los equipos para que produzcan la arquitectura objetivo. Si cambio la arquitectura sin cambiar la estructura organizativa, voy a terminar con el mismo monolito distribuido."
+
+5. **¿Cómo manejas transacciones distribuidas?**
+
+   **Orientación:** Evita 2PC en microservicios. Esperan Saga (orchestrated vs choreographed), Outbox y honestidad sobre consistencia.
+
+   **Respuesta de un senior:** "En un monolith usas una transacción ACID local. En microservicios, el ACID multi-servicio es inviable y pagas con disponibilidad; lo reemplazo por consistencia eventual orquestada. Uso *Saga*: una secuencia de pasos locales con una compensación por cada uno. Distingo *orchestrated* —un coordinador explícito que sabe la secuencia y gestiona estados (más fácil de supervisar)— y *choreographed* —cada servicio reacciona a eventos, más desacoplado pero más difícil de seguir. Añado *Outbox* para publicar los eventos de forma atómica con el cambio de base de datos y evitar perderlos. El trade-off de fondo es que admito ventanas de inconsistencia y las documento: nunca 'declaro' como si fuera ACID; defino compensaciones de negocio para cada paso."
+
+6. **Diseña el sistema de dispatch de Uber.**
+
+   **Orientación:** Un clásico de system design. Buscan escala, geo-indexé y eventos. Muestra cómo particionas el problema.
+
+   **Respuesta de un senior:** "Lo modelaría por eventos a escala. Mover los conductores y rider actualizando su posición a alta frecuencia: cada rider pide un viaje, que es un evento, y su posición se guarda en un geo-index (Redis Geospatial o un servicio de matching). Separaría responsabilidades: un servicio de *location pool* que mantiene y publica posiciones, y un servicio de *matching* que, ante un event 'trip request', encuentra los conductores más cercanos en el área, les ofrece el viaje (con timeout), y emite un event 'trip assigned'. Cada asignación genera una cadena de eventos de estado del viaje. El matching necesita baja latencia, así que lo mantengo cerca del geo-index en la región del usuario; el resto del procesamiento (precios, cobro) puede ser asíncrono. El cuello de botella son las zonas calientes (centro de la ciudad): hay que particionar el espacio geográfico para no saturar un nodo."
+
+7. **Critica: base de datos compartida entre 3 servicios.**
+
+   **Orientación:** Saben que es un smell. Quieren que expliques por qué rompe la autonomía.
+
+   **Respuesta de un senior:** "Es un anti-patrón que destruye lo que buscan los microservicios. Si tres servicios escriben y leen el mismo esquema, técnicamente no son servicios independientes: están acoplados por el contrato de datos. Un cambio de esquema exige coordinar a los tres equipos (o uno rompe a los otros); la evolución que quieres evitar en un monolith vuelve por la puerta de atrás. Además pierdes el ownership de los datos y la capacidad de hacer deploy independiente, porque un schema change es un cambio que afecta a todos. El cumplimiento de Conway's Law también se rompe: tienes tres equipos 'independientes' coordinándose por una tabla compartida. La alternativa es que cada servicio sea dueño de sus datos y se integren por API o eventos, aceptando consistencia eventual donde haga falta."
+
+8. **Desventajas de una Saga orquestada.**
+
+   **Orientación:** Buscan que no idealices la orquestación. Compensaciones complejas, races de estado y el orquestador como bottleneck.
+
+   **Respuesta de un senior:** "El orquestador centraliza la lógica, lo que es una ventaja de visibilidad, pero también su gran desventaja. Primero, introduce un *punto único de acoplamiento*: conoce todos los pasos y todos los contratos; si crece, se convierte en el servicio que nadie quiere tocar. Segundo, el orquestador puede volverse un *bottleneck* y una single point of failure para el flujo. Tercero, las *compensaciones* son complejas de mantener: cada paso debe tener su inversa, y los pasos intermedios que ya se completaron deben poderse deshacer de forma segura incluso si el orquestador se cae a mitad. Y cuarto, hay *race conditions* de estado: el coordinador debe tolerar timeouts, respuestas tardías y duplicados sin bloquearse. Por eso en flujos simples prefiero coreografía, y reservo orquestación para flujos donde necesito supervisar cada paso."
+
+9. **¿Cómo aseguras la comunicación entre servicios?**
+
+   **Orientación:** Esperan mTLS + OAuth client credentials y concepto de Zero Trust, no solo "token en el header".
+
+   **Respuesta de un senior:** "Parto de Zero Trust: nada dentro de la red es de fiar por defecto. Autentico cada llamada servicio-a-servicio con *mTLS* (certificados de cliente), para garantizar que el emisor es quien dice ser a nivel de transporte, y autorizo con *OAuth2 Client Credentials*: cada servicio tiene credenciales propias y pide un token con scopes limitados. No confío en la red, así que cifro en tránsito (TLS) entre todos los peers y aplico autorización mínima. En AWS, por ejemplo, uso IAM service-linked roles o un service mesh que gestiona mTLS y policy por workload, con network policies que limitan quién puede hablar con quién. Además, end-to-end siempre logs todo con trace_id para auditar el flujo."
+
+10. **Define SLI, SLO y SLA.**
+
+    **Orientación:** Debes separar el indicador, el objetivo y el contrato, y la relación con el error budget.
+
+    **Respuesta de un senior:** "En el modelo SRE: un *SLI* es el indicador real que mido, p. ej. la fracción de requests que responden en menos de 300 ms con status no-5xx. Un *SLO* es el objetivo que me pongo con el equipo y el negocio: 'el 99.9% de las requests deben cumplir ese SLI en una ventana de 30 días'. El SLO me da un *error budget*: si en la ventana voy al 99.5%, he gastado el 0.4% de presupuesto de error restante, y eso decide cuándo freno releases para estabilizar. Un *SLA* es el contrato *legal* con el cliente, casi siempre más alto que mi SLO interno, porque si el SLA es mayor que el SLO, un incumplimiento del SLA ocurriría mientras todavía estoy 'a tiempo' según mi presupuesto. El SLO es mi herramienta de ingeniería para balancear velocidad y reliability."
 
 ---
 

@@ -379,33 +379,65 @@ Diseña la definición ASL (Amazon States Language) del Saga del Lab 1, con paso
 
 ## Entrevistas
 
-1. **Explica difference entre at-least-once y exactly-once.**
-   - Deja claro qué "exactly-once real de extremes imposible", y lo que se usan de facto (dedup/idempotencia) para lograr **effectively once**. Menciona el teorema psy** two generals.**
+1. **Explica la diferencia entre at-least-once y exactly-once.**
 
-2. **¿Cómo manejas distribui transactions en EDA?**
-   - **Saga** (coreografía vs orquestación), compensaciones por negocio, **outbox**, monitor LLQ. Incluye ejemplo.
+   **Orientación:** Demuestran que entiendes que el "exactly-once" perfecto es un ideal irrealizable en sistemas distribuidos (problema de los dos generales) y que la solución práctica es *effectively once* (at-least-once + idempotencia).
 
-3. **Cuando eliges ordenado FIFO vs Standard?**
-   - Importancia del orden vs throughput. Coste throughput más bajo FIFO + heart of line. Agrupación por (entity id) aggregateId.
+   **Respuesta de un senior:** "Los brokers modernos dan *at-least-once*: garantizan que el mensaje no se pierde, pero no que se entregue una sola vez; en la práctica un consumidor puede recibir un duplicado tras un timeout o un reintento. El 'exactly-once perfecto' es irrealizable entre dos sistemas distribuidos: se reduce al problema de los dos generales, donde sin canal confiable no puedes probar que el otro ha confirmado. Lo que la industria realmente usa es *effectively once*: at-least-once más *idempotencia* en el consumidor. Hago la operación idempotente (una clave de deduplicación o una condición en la base de datos tipo 'si ya existía, no volver a aplicar'), de modo que aunque llegue dos veces el resultado neto es el mismo. Eso me da el 'una sola vez' que el negocio necesita sin depender de garantías imposibles del transporte."
 
-4. **Dead Letter Queue: cómo operasl**
-   - Alarming sobre DLQ, inspección manual tools schema valid, redrive plan. Habla de "poison messages" inevitable.
+2. **¿Cómo manejas transacciones distribuidas en Event-Driven Architecture?**
 
-5. **Diseña sistema de events para cash/platform de alta volatility.**
-   - EventBridge multi-bus, schema registry, consumers idempotentes, trazabilidad + DLQ/Retry, versionado y backward compat.
+   **Orientación:** Esperan Saga, compensaciones de negocio, Outbox y monitorización de dead letter queues, con un ejemplo concreto.
 
-6. **¿Cuándo NO usarías EDA?**
-   - Baja latencia, contexto dependiente síncrona, bajo do sindical madurez, consistencia crítica y operativa dominada por ACID.
+   **Respuesta de un senior:** "En EDA no tengo una transacción que abarque varios servicios; tengo consistencia eventual. Uso *Saga*: una secuencia de pasos, cada uno dentro de un servicio, con su compensación. En coreografía, cada servicio publica un evento y reacciona a los demás; en orquestación, un coordinador distribuye y supervisa los pasos. El patrón *Outbox* es crítico: cuando un servicio cambia su base de datos, escribe el evento de salida en la misma transacción local y un relé lo publica después, garantizando que el cambio de estado y la notificación ocurren juntos o no ocurren. Ejemplo concreto de pago: 'OrderCreated' → el servicio de inventario reserva y emite 'StockReserved' → el de pago cobra y emite 'PaymentCompleted'; si el pago falla, la compensación es emitir 'StockReleased' y devolver la orden a estado cancelada. Y siempre vigilo las dead letter queues con alertas, porque los mensajes 'venenosos' que no se puedan procesar deben saltar a la vista, no perderse."
 
-7. **Explains Actores Tácticos CQRS/Event Sourcing ventajas y desventajas de producción**
+3. **¿Cuándo eliges cola FIFO ordenada vs estándar?**
 
-8. **¿Cómo garantizas solo una s stealing processing of a message?**
-   - Con efectos idempotentes, dedup id, at-least-once + idempotencia = effectively once; evitar check-then-act ra Conditions.
+   **Orientación:** Quieren que balancees *orden* contra *throughput* y la limitación FIFO con agrupación por agregado.
 
-9. **Event Orchestrator vs coreografía: ¿cuál y porqué?**
+   **Respuesta de un senior:** "Elijo FIFO cuando el orden de los mensajes es semánticamente importante —por ejemplo, actualizaciones secuenciales del mismo pedido, donde aplicar 'pay' antes que 'create' rompe el estado—. La cola FIFO garantiza exactly-once y entrega en orden por *message group id*, que uso para agrupar por la entidad (por ejemplo, el `orderId`): cada pedido se procesa en orden, pero grupos distintos pueden ir en paralelo. El costo es throughput: FIFO tiene menor rendimiento y la limitación de que un grupo bloquea la cabeza de línea. Si el orden no importa (logout events, métricas, notificaciones que no compiten por estado), uso la estándar por su alto rendimiento y menor latencia. La regla es: orden por agregado → agrupar por `aggregateId`; sin requisito de orden → cola estándar por simplicidad y rendimiento."
 
-10. **Diseña un esquema evento de orden para millones/day.**
-    - Estructura JSON, headers estándar (eventType, version, source), partition key = aggregateId, atributos y metadatos de trazabilidad (correlationId, traceparent).
+4. **Dead Letter Queue: ¿cómo la operas?**
+
+   **Orientación:** Debes cubrir alertas sobre DLQ, inspección y redrive, y asumir el poisson message como inevitable.
+
+   **Respuesta de un senior:** "La DLQ es la red de seguridad para mensajes que no se procesan tras varios reintentos; no es un basurero. La opero así: (1) *alerto* sobre la métrica de 'mensajes en DLQ' con un umbral, porque crecer sin avisar es una pérdida silenciosa; (2) *inspecciono* el poisson antes de nada —abro uno, miro el payload y el error— para entender si es un mensaje corrupto que hay que descartar o un bug que hay que arreglar; (3) *valido con el schema* para cazar versiones antiguas o payloads mal formados; y (4) *planifico el redrive*: cuando está corregida la causa, reproceso los mensajes en orden y con logs para verificar. Asumo que los poisson messages son inevitables y por eso cada mensaje lleva metadatos de intento y causa de error. El objetivo es que un mensaje problemático nunca se pierda y siempre tenga una ruta de resolución auditada."
+
+5. **Diseña un sistema de eventos para una plataforma de alta volatilidad.**
+
+   **Orientación:** Esperan EventBridge multi-bus, schema registry, consumidores idempotentes, trazabilidad y versionado con backward compatibility.
+
+   **Respuesta de un senior:** "Diseñaría sobre *múltiples buses por dominio* (EventBridge) separados por bounded context, para que un dominio no se acople a la evolución de otro. Cada evento pasa por un *schema registry* que valida el payload y su versión, garantizando contratos entre productor y consumidor. Los consumidores serán *idempotentes*, porque en high throughput va a haber duplicados. Añado *trazabilidad* end-to-end: `correlationId` y `traceId` en cada evento para seguir una transacción y debuggear. Para violaciones de contrato o fallos, cada bus alimenta su *DLQ con reintentos* configurados. Versiono los eventos con *backward compatibility* (agrego campos opcionales, nunca rompo nombres) para que productor y consumidor se desplieguen de forma independiente. Y monitoreo el throughput y la latencia del bus para ver picos de volatilidad antes de que degraden. El resultado es un backbone de eventos que escala y no se rompe cuando cambia la carga."
+
+6. **¿Cuándo NO usarías Event-Driven Architecture?**
+
+   **Orientación:** Buscan honestidad: baja latencia estricta, requerimientos síncronos, baja madurez y consistencia crítica ACID.
+
+   **Respuesta de un senior:** "EDA añade latencia y complejidad; no es la respuesta universal. No lo usaría en: *latencia crítica end-to-end*, donde el paso asíncrono por un broker añade overhead que el usuario no tolera; *contextos que requieren respuesta inmediata y síncrona* (un login, un pago con confirmación en el momento), donde esperar un evento de vuelta complica en vez de ayudar; *equipos con poca madurez operativa*, porque necesitas DLQs, monitoreo, reintentos y versionado que una arquitectura síncrona no exige; y *consistencia crítica manejada cómodamente con ACID* en un límite acotado, donde la eventual consistency de los eventos no aporta y solo complica. Mi criterio: EDA donde hay desacoplamiento real entre equipos, procesamiento asíncrono justificado o eventos de negocio que varios contextos consumen; para flujos simples y consistentes, síncrono directo."
+
+7. **¿Ventajas y desventajas de producción de CQRS y Event Sourcing?**
+
+   **Orientación:** Definen ambos, su parecido (los dos martillan la evolución del estado) y su realidad operativa en producción.
+
+   **Respuesta de un senior:** "Los dos se basan en eventos, pero son distintos. *Event Sourcing* persiste el estado como una secuencia inmutable de eventos y deriva el estado actual proyectándolos; te da auditoría completa, tiempo de viaje (reproyección) y reconstrucción histórica, pero exige manejar versionado de eventos, proyecciones y snapshotting, y es caro de operar en dominios donde eso no aporta valor. *CQRS* separa el modelo de escritura del modelo de lectura para optimizar cada uno; te da lectura optimizada y escalada de forma independiente, pero añade complejidad de consistencia (el lado de lectura puede ir tarde) y hay que mantener dos modelos. En producción, la desventaja común es el costo operativo y el riesgo de sobre-ingeniería: aplicarlos 'porque está de moda' crea más complejidad que la que resuelve. Los usaría donde el audit trail y la evolución histórica son requisito de negocio (fintech, compliance), no en un CRUD cualquiera."
+
+8. **¿Cómo garantizas que un mensaje se procese una sola vez?**
+
+   **Orientación:** La respuesta senior se apoya en idempotencia + dedup, at-least-once y cómo evitar el check-then-act.
+
+   **Respuesta de un senior:** "Parto de que el transporte es at-least-once, así que 'una sola vez' lo resuelvo en el consumidor con *efectos idempotentes*: la operación se diseña para que aplicarla dos veces sea equivalente a aplicarla una. Combino una *clave de deduplicación* (por ejemplo, un `dedupKey` basado en el `eventId`) que persisto con una condición atómica en la base de datos. Lo crítico es evitar el *check-then-act*: mirar '¿existe la clave?' y luego insertar no es seguro si dos procesos leen a la vez; en cambio uso una condición atómica del tipo 'inserta solo si la clave no existe', o `attribute_not_exists`, para que la competición no duplique el efecto. Con at-least-once + esa idempotencia consigo *effectively once*: la semántica que el negocio necesita. Nunca dependo de que el broker entregue exactamente una vez."
+
+9. **Event Orchestrator vs coreografía: ¿cuál y por qué?**
+
+   **Orientación:** Compara visibilidad/gobernanza contra desacoplamiento/red, y cuándo cada uno.
+
+   **Respuesta de un senior:** "La *coreografía* deja que cada servicio reaccione a eventos y publique los suyos, sin un coordinador: máximo desacoplamiento y evolución independiente, pero pierdes visibilidad central —no hay nadie que 'mire' el flujo completo— y si el flujo crece es difícil entender y depurar. La *orquestación* centraliza el flujo en un coordinador explícito (como un Step Functions): ganas visibilidad, gobernanza y retry centralizado, pero introduces acoplamiento al orquestador, que conoce todos los contratos y puede volverse cuello de botella o single point of failure. Elijo *orquestación* cuando el flujo es complejo, crítico y debo supervisarlo (pagos, provisioning), o cuando necesito estados explícitos y auditables; elijo *coreografía* cuando el acoplamiento entre equipos es indeseable, los contextos son independientes y la trazabilidad la compenso con buena observabilidad. No es mejor o peor: es dónde quieres poner la complejidad y quién necesita ver el flujo."
+
+10. **Diseña un esquema de evento de orden para millones de eventos/día.**
+
+    **Orientación:** Buscan un JSON versionado, headers estándar, partition key = aggregateId y metadatos de trazabilidad.
+
+    **Respuesta de un senior:** "Diseñaría el evento con una envoltura y un payload versionados. En la *envoltura* (headers) pongo los metadatos estándar: `eventType` (o `type`), `version`, `source`, `subject` y los de trazabilidad `correlationId` y `traceId`. Uso `version: 1` en el tipo para poder evolucionar con backward compatibility. En el *payload* va el estado del negocio: los campos del pedido relevantes para los consumidores. La clave de partición la pongo en `orderId` (el `aggregateId`) para que todos los eventos de un mismo pedido queden en la misma partición y se garanticen el orden y la lectura coherente de esa entidad; otros consumidores que quieran por usuario usan un índice secundario. Añado metadatos de temporalidad (timestamp, el tiempo del negocio en vez del del broker). Con eventos pequños, idempotentes y versionados, el bus aguanta millones/día y cualquier consumidor puede reconstruir el estado del agregado de forma aislada."
 
 ---
 

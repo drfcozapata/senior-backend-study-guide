@@ -283,14 +283,58 @@ Define qué páginas requieren despertar on-call vs. qué genera ticket; escribe
 ## Entrevistas
 
 1. **¿Cómo diferenciarías observabilidad de monitoring? ¿Qué le pides a un sistema para considerarlo "observable"?**
+
+   **Orientación:** Contrapone el *quién/pregunta conocida* (monitoring) con *preguntas ad hoc sobre estados imprevistos* (observabilidad) y las señales que lo permiten.
+
+   **Respuesta de un senior:** "El monitoring te responde preguntas que *ya sabes* que vas a hacer: '¿está caído?', '¿el p99 pasó de 300 ms?'. La observabilidad te permite *explorar* y responder preguntas que no anticipaste: '¿qué estaba pasando en el sistema a las 3:14, justo antes de que Colombia fallara?' Monitoring te dice *que* algo está mal; observabilidad te dice *por qué*. Para considerar un sistema observable le pido tres cosas: *métricas* que capturen el estado agregado (con percentiles, no solo medias), *logs estructurados* y correlacionados (con `requestId`/`traceId`), y *tracing distribuido* que reconstruya la vida de una request a través de todos los servicios; y que esas tres señales se puedan **correlacionar** —saltar de un trace a sus logs—. Si de un gráfico no puedo llegar a la causa raíz sin redeploy, no es observable, es solo monitored."
+
 2. **¿Por qué la media no sirve para latencia? ¿Qué usarías y por qué?**
+
+   **Orientación:** Apunta a que la media esconde colas y outliers; defiende los percentiles y el sesgo de datos no-Gaussianos.
+
+   **Respuesta de un senior:** "La media no sirve porque la latencia suele ser *muy sesgada*: una cola corta de requests pesadas o un cold start pueden disparar la media sin que la mayoría de usuarios note nada. La media además *mezcla*: puedes tener el p50 perfecto y un peor 5% devastador, invisible en el promedio. Por eso uso *percentiles*: `p50` para la experiencia típica, `p95`/`p99` para lo que los extremos sienten, y `p99.9` para los peores usuarios. A un senior también le importa el *sesgo no-Gaussiano* de los datos de ops: con una media y 3σ puedes fallar a la hora de alertar solo porque la distribución no es normal. Los percentiles, y técnicas no paramétricas como el test de Kolmogorov-Smirnov o medias móviles, capturan mejor la realidad. La regla: para latencia, mira la *distribución*, no el promedio."
+
 3. **Explica cómo un `trace_id` te permite debuggear un incidente en microservicios.**
+
+   **Orientación:** Debes mostrar el camino: un ID que atraviesa todos los servicios y conecta spans y logs.
+
+   **Respuesta de un senior:** "Cuando una request atraviesa varios servicios, cada uno es un *span*, y todos quedan unidos por un `trace_id` que se genera en el borde (API Gateway) y se *propaga* de llamada a llamada vía header (W3C `traceparent`). Para debuggear, con ese ID puedo reconstruir el *camino completo* del request: en el trazador (Jaeger/Tempo/X-Ray) veo la cadena de spans —cuál duró, cuál falló, cuál fue lento— y así localizo el cuello de botella o el punto de error exacto. Y como cada servicio también escribe logs *con el mismo `trace_id`*, salto de la vista del trace al detalle del log del servicio sospechoso. Sin esto, un incidente distribuido es un puzzle sin conexión: solo sabes que 'algo falló entre servicio A y B', pero no dónde. El trace_id convierte el caos en una historia legible y correlacionada."
+
 4. **¿Qué niveles de telemetría debes cubrir para ver la salud de un servicio? Da un ejemplo por nivel.**
-5. **¿Cuándo una alerta debe ser un page vs. un ticket? ¿Qué es el *alert fatigue* y cómo lo evitas?**
+
+   **Orientación:** Repite el marco de los 5 niveles (business, application, infra, client, pipeline). Demuestra amplitud.
+
+   **Respuesta de un senior:** "Para 'ver la salud de todo aquello de que depende mi servicio' cubro cinco niveles: *business* (las métricas que al negocio le importan: transacciones de venta, sign-ups, revenue, churn); *application* (el servicio en sí: tiempos de transacción, latencia de respuesta, fallos); *infrastructure* (lo que lo sostiene: CPU, memoria, uso de disco, estado de la DB, red); *client software* (lo que percibe el usuario final en browser/móvil: crashes, errores, tiempos de carga percibidos —RUM—); y *deployment pipeline* (el estado del CI: build pasa/falla, lead time, frecuencia de deploys, estado de entornos). Ejemplos concretos: pedidos/día (business), p99 del API (application), CPU de la DB (infra), carga de página percibida (client), build rojo (pipeline). Con esas cinco capas veo el *porqué* de un problema, no solo el síntoma."
+
+5. **¿Cuándo una alerta debe ser un page vs. un ticket? ¿Qué es el alert fatigue y cómo lo evitas?**
+
+   **Orientación:** Distingue acción inmediata (page) de lo que puede esperar (ticket), y ataca el exceso de alertas.
+
+   **Respuesta de un senior:** "Un *page* es solo para lo que exige despertar a un humano *ahora*: un problema que está degradando al usuario o puede perder datos, donde cada minuto cuenta. Todo lo demás, que puede esperar horas o días, es un *ticket* (incidente pendiente, backlog). El *alert fatigue* es tener tantas alertas que el on-call se insensibiliza: al final ignoras páginas, aunque alguna sea crítica. Lo evito con varias reglas: (1) cada página debe tener un *runbook* o no existe; (2) prefiero *tickets* sobre *pages* por un margen amplio; (3) uso *umbrales dinámicos* y percentiles, no absolutos frágiles; (4) *correlaciono con deploys* —una alerta en una ventana de deploy se interpreta y silencia a propósito—; y (5) tras cada incidente borro las alertas que no predijeron nada (método de Limoncelli). Página pocas y valiosas, no todas."
+
 6. **¿Cómo integras los deployment overlays para correlacionar cambios con efectos?**
-7. **¿Qué es *RUM* y por qué difiere de la telemetría del server?**
+
+   **Orientación:** Habla de marcar deploy en gráficas, linking causa/efecto, y el time de detección.
+
+   **Respuesta de un senior:** "Superpongo en cada gráfica de métricas una *línea vertical por cada deploy* (la técnica de Etsy, 'vertical line technology'). Así, si tras un deploy aparece un spike, una caída o un cambio en el p99, lo correlaciono de inmediato con ese cambio, en vez de buscar señales a ciegas. Con una ventana temporal—'qué se desplegó a las 14:02 y qué métrica cambió a las 14:03'—, acoto la causa. Esto también cambia el *time to detection*: como sé cuándo tocó producción, sé qué revisar. Y en flujo: una alerta dentro de la ventana de deploy se *interpreta dentro de ese contexto* (settling period tras el deploy, cache misses, etc.), no se dispara al on-call sin más. El overlay convierte cada cambio en una hipótesis contrastable contra la telemetría."
+
+7. **¿Qué es RUM y por qué difiere de la telemetría del server?**
+
+   **Orientación:** Distingue lo que el servidor mide de lo que el usuario *percibe*.
+
+   **Respuesta de un senior:** "RUM (Real User Monitoring) es la telemetría que capturas **en el cliente**—navegador o móvil—midiendo la experiencia real de usuarios reales: tiempos de carga percibidos (LCP, FCP), errores de JavaScript, latencias de red, transacciones de usuario. Difiere del servidor porque el servidor mide *tu* tiempo de procesamiento, pero no la red entre el servidor y el usuario, ni el cache del browser, ni los reintentos del cliente. El p95 que ves en tu API no es lo que el usuario siente. Por eso RUM importa: es lo único que ve la experiencia *completa*. El valor senior está en *unirlo*: correlacionar la señal RUM con el `trace_id` del backend, para pasar de 'el usuario tarda 4 s' a 'el servidor tardó 800 ms, la diferencia es red/cliente'. RUM sin tracing es síntoma; RUM + tracing es diagnóstico."
+
 8. **Cuenta un incidente que resolviste usando datos/telemetría (método científico).**
+
+   **Orientación:** Cuentan una historia corta con hipótesis, evidencia y verificación; no un monólogo. Confirma tu perfil senior con un ejemplo real.
+
+   **Respuesta de un senior:** "Hubo un incidente de pagos que aparecía como 'timeouts intermitentes', sin causa obvia. Primero *formulé la hipótesis* usando evidencia en vez de ruido: saqué el trace del p99 y vi que la degradación coincidía con los *peaks* del fin de semana. En lugar de culpar al proveedor externo de pagos, miré la telemetría del endpoint de salida: la latencia *al tercero* se disparaba justo cuando nuestra cola de reintentos crecía. Mi hipótesis: no era el tercero, era nuestro *retry* agresivo que lanzaba una avalancha ante un proveedor levemente lento, saturando su límite. Lo **verifiqué** con una hipótesis controlada: limité los reintentos y añadí *backoff*, y el p99 volvió a la normalidad en la siguiente serie. El método científico—hipótesis, evidencia, prueba—hizo que lo resolviera en minutos con datos, no asumiendo 'culpa del proveedor'."
+
 9. **¿Cómo transformas logs en métricas? Da un ejemplo concreto.**
+
+   **Orientación:** Muestra el mecanismo (centralizar logs y contarlos/transformarlos) y un ejemplo concreto de agregación por tipo de error.
+
+   **Respuesta de un senior:** "Centralizo los logs y los transformo agregándolos en el event router: en vez de miles de líneas de log, las *cuento* y las convierto en métricas de alto nivel para alertar y hacer trending. Del mismo modo, un log de error 'segfault' repetido se convierte en una métrica 'número de segfaults' en todo el clúster, y paso de 'tuvimos 10 la semana pasada' a alertar 'miles en la última hora'. Concretamente: parseo un campo del log (por ejemplo, `status=5xx`, o un `exceptionType`) y cuento su frecuencia por ventana temporal en Prometheus/Loki. Con *Loki* puedo hacer un `count_over_time({app="api"} |= "Segmentation fault" [5m])` para obtener esa métrica. Así cualquier log cuyo significado escape al agregado de métricas se vuelve visible y alertable, sin instrumentación nueva del servicio."
 
 ---
 
