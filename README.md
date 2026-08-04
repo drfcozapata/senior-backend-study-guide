@@ -26,7 +26,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 | 04 | [AWS Serverless](04-AWS-Serverless.md) | Lambda, API Gateway, EventBridge, Step Functions, Cognito |
 | 05 | [Bases de datos distribuidas](05-Bases-de-datos-distribuidas.md) | DynamoDB, patrones NoSQL, particionamiento, GSI/LSI |
 | 06 | [Infraestructura como Código](06-Infraestructura-como-Codigo.md) (+ [Apéndice A](06-Infraestructura-como-Codigo-Apendice-A.md)) | Terraform, CloudFormation |
-| 07 | Observabilidad | CloudWatch, Datadog, Dynatrace, OpenTelemetry, Distributed Tracing |
+| 07 | [Observabilidad](07-Observabilidad.md) (+ [Apéndice A](07-Observabilidad-Apendice-A.md)) | OpenTelemetry, Prometheus, Distributed Tracing, RUM, alerting SRE |
 | 08 | Seguridad | OAuth2, JWT, OpenID Connect, IAM, mejores prácticas |
 | 09 | Diseño de APIs | REST, GraphQL, Webhooks, versionado, idempotencia |
 | 10 | Escalabilidad y Resiliencia | Caching, Sharding, Replication, Circuit Breaker, Backpressure |
