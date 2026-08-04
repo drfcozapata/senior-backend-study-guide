@@ -117,10 +117,12 @@ flowchart TB
     DB --> SR
     AL --> PAGERL["on-call"]
 
-    classDef app fill:#FFD54F,stroke:#F57F17;
+    classDef app fill:#FFD54F,stroke:#F57F17,color:#333;
+    classDef collection fill:#C5E1A5,stroke:#558B2F,color:#333;
+    classDef view fill:#B3E5FC,stroke:#0277BD,color:#333;
     class SDK,EV app;
-    class AGG,LOGS,TR,COL2 fill:#C5E1A5,stroke:#558B2F;
-    class DB,AL,ANOM,SR fill:#B3E5FC,stroke:#0277BD;
+    class AGG,LOGS,TR,PLAT collection;
+    class DB,AL,ANOM,SR,PAGERL view;
 ```
 
 ### Information radiators
