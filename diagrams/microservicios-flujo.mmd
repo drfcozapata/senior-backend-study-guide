@@ -1,0 +1,56 @@
+flowchart TD
+    Client["Cliente"]
+
+    subgraph EDGE["Edge Layer"]
+        GW["API Gateway / BFF"]
+    end
+
+    subgraph CORE["Servicios Core (bounded contexts)"]
+        US["User Service"]
+        PS["Product Service"]
+        OS["Order Service"]
+    end
+
+    subgraph ASYNC_BUS["Bus de Eventos"]
+        EB[("Amazon EventBridge")]
+        SQS[("Amazon SQS")]
+        SNS[("SNS Topic")]
+    end
+
+    subgraph WORKERS["Consumidores Asíncronos"]
+        INV["Inventory Worker"]
+        NOT["Notification Worker"]
+        AUD["Audit/Elastic"]
+    end
+
+    subgraph DATA["Persistencia"]
+        US_DB[("PostgreSQL")]
+        PROD_DB[("DynamoDB")]
+        ORD_DB[("Aurora")]
+        REDIS[("ElastiCache")]
+    end
+
+    Client -->|REST/HTTPS| GW
+    GW -->|/users| US
+    GW -->|/products| PS
+    GW -->|/orders| OS
+
+    OS -.->|AuthN/OIDC| US
+
+    OS -->|Domain Event: OrderCreated| EB
+    EB --> SQS
+    SQS --> INV
+    SNS --> NOT
+    EB -.-> AUD
+
+    US --> US_DB
+    PS --> PROD_DB
+    OS --> ORD_DB
+    PS -.-> REDIS
+
+    classDef aws fill:#FF9900,stroke:#232F3E,color:#fff;
+    classDef db fill:#0E8A5F,stroke:#fff,color:#fff;
+    classDef svc fill:#232F3E,stroke:#fff,color:#fff;
+    class GW,EB,SQS,SNS aws;
+    class US_DB,PROD_DB,ORD_DB,REDIS db;
+    class US,PS,OS,INV,NOT,AUD svc;

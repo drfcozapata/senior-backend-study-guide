@@ -1,0 +1,46 @@
+%% Módulo 04: Flujo Serverless completo — API Gateway → Lambda → EventBridge → Step Functions
+flowchart TD
+    Client["Cliente<br/>(Web / Mobile)"]
+    CF["CloudFront<br/>(CDN)"]
+
+    subgraph EDGE["Edge Layer"]
+        APIGW["API Gateway<br/>(HTTP API)"]
+        COG["Cognito<br/>(JWT Authorizer)"]
+    end
+
+    subgraph COMPUTE["Compute (Lambda)"]
+        FN1["fn-orders<br/>(REST Handler)"]
+        FN2["fn-email<br/>(Notification)"]
+        FN3["fn-image<br/>(Processing)"]
+    end
+
+    subgraph STATE["State Management"]
+        DDB[("DynamoDB<br/>Orders")]
+        S3[("S3<br/>Assets")]
+    end
+
+    subgraph ORCHESTRATION["Orchestration & Events"]
+        EB["EventBridge<br/>(Bus + Rules)"]
+        SF["Step Functions<br/>(Order Saga)"]
+        SQS["SQS Queue<br/>(Heavy Tasks)"]
+    end
+
+    Client -->|HTTPS| CF
+    CF --> APIGW
+    APIGW --> COG
+    APIGW -->|Proxy| FN1
+
+    FN1 -->|PutItem| DDB
+    FN1 -->|Publish Event| EB
+    EB -->|RuleMatch| SF
+    EB -->|RuleMatch| SQS
+    SQS --> FN3
+    SF --"Tasks"--> FN2
+    FN3 -.->|Fetch/Save| S3
+
+    classDef aws fill:#FF9900,stroke:#232F3E,color:#fff;
+    classDef compute fill:#232F3E,stroke:#fff,color:#fff;
+    classDef state fill:#0E8A5F,stroke:#fff,color:#fff;
+    class CF,APIGW,COG,EB,SF,SQS aws;
+    class FN1,FN2,FN3 compute;
+    class DDB,S3 state;

@@ -1,0 +1,34 @@
+%% Módulo 03: Saga y Outbox — flujo de ejemplo
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant API as API Gateway
+    participant O as Order Service
+    participant DB as PostgreSQL
+    participant OB as Outbox Worker
+    participant EB as EventBridge/SNS
+    participant P as Payment Service
+    participant I as Inventory Service
+    participant SF as Step Functions (Saga)
+
+    C->>API: POST /orders
+    API->>O: createOrder()
+    O->>DB: BEGIN TX
+    O->>DB: INSERT orders
+    O->>DB: INSERT outbox (OrderCreated, PENDING)
+    O->>DB: COMMIT
+    Note over O,DB: Escritura atómica (dual write evitado)
+
+    OB->>DB: SELECT * FROM outbox WHERE status='PENDING'
+    OB->>EB: publish OrderCreated
+    OB->>DB: UPDATE outbox SET status='SENT'
+
+    EB->>SF: StartExecution (Saga)
+    SF->>I: ReserveStock
+    I-->>SF: OK / StockReserved
+    SF->>P: AuthorizePayment
+    P-->>SF: OK / PaymentAuthorized
+    SF->>O: ConfirmOrder
+    Note over SF: Si falla un paso,<br/>se ejecutan las compensaciones<br/>(VoidPayment, ReleaseStock)
+
+    EB-->>C: WebSocket /notification

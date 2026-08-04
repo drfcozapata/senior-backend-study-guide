@@ -1,0 +1,405 @@
+# Módulo 00 — Glosario
+
+Glosario vivo de la guía. Crece con cada módulo: cada vez que aparezca un concepto nuevo en cualquier módulo, su definición de referencia se añade aquí. Los módulos enlazan a estas definiciones en lugar de repetirlas.
+
+**Cómo leer este glosario:** cada entrada tiene una definición corta (una frase), una definición práctica (qué implica en sistemas reales) y una referencia al módulo donde se explica en profundidad.
+
+---
+
+## Índice alfabético
+
+[A](#a) · [B](#b) · [C](#c) · [D](#d) · [E](#e) · [F](#f) · [G](#g) · [H](#h) · [I](#i) · [J](#j) · [L](#l) · [M](#m) · [N](#n) · [O](#o) · [P](#p) · [R](#r) · [S](#s) · [T](#t) · [V](#v) · [W](#w)
+
+---
+
+## A
+
+### ACID
+**Definición corta:** Conjunto de propiedades (Atomicidad, Consistencia, Aislamiento, Durabilidad) que garantiza que las transacciones de una base de datos se procesen de forma fiable.
+
+**En la práctica:**
+- **Atomicidad:** una transacción se ejecuta completamente o no se ejecuta. No hay estados intermedios.
+- **Consistencia:** cada transacción lleva la base de datos de un estado válido a otro estado válido (se cumplen todas las restricciones).
+- **Aislamiento:** transacciones concurrentes no se ven entre sí; el resultado es equivalente a ejecutarlas en serie.
+- **Durabilidad:** una vez confirmada (commit), la transacción sobrevive a fallos del sistema.
+
+Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID completo. En sistemas distribuidos, mantener ACID a través de múltiples nodos es costoso o imposible (ver [CAP Theorem](#cap-theorem)), lo que motiva modelos alternativos como [BASE](#base).
+
+**Contraste con:** [BASE](#base) · **Profundizado en:** Módulo 05 (Bases de datos distribuidas)
+
+### At-least-once (semántica de entrega)
+**Definición corta:** Garantía de que cada mensaje se entrega **una o más veces**; nunca se pierde, pero puede duplicarse.
+
+**En la práctica:** es la semántica por defecto en la mayoría de sistemas de mensajería (SQS estándar, Kafka con configuración habitual). El consumidor **debe ser idempotente** porque recibirá duplicados. Es el trade-off habitual: prefieres procesar dos veces a perder un evento de pago.
+
+**Relacionado con:** [Idempotencia](#idempotencia) · [At-most-once](#at-most-once-semántica-de-entrega) · [Exactly-once](#exactly-once-semántica-de-entrega) · **Profundizado en:** Módulo 03
+
+### At-most-once (semántica de entrega)
+**Definición corta:** Garantía de que cada mensaje se entrega **como máximo una vez**; puede perderse, pero nunca se duplica.
+
+**En la práctica:** adecuada cuando perder un mensaje es aceptable (métricas, logs, telemetría) y el coste de duplicar sería peor. Se logra sin reintentos ni ACKs.
+
+**Profundizado en:** Módulo 03
+
+---
+
+## B
+
+### Backpressure
+**Definición corta:** Mecanismo por el cual un sistema señala a sus productores que reduzcan el ritmo cuando no puede procesar la carga entrante.
+
+**En la práctica:** sin backpressure, un consumidor lento provoca colas infinitas, memoria agotada y caídas en cascada. Las estrategias incluyen: buffers acotados, rechazo explícito (load shedding), pausas en el productor, o colas intermedias (SQS) que absorben picos.
+
+**Profundizado en:** Módulo 10
+
+### BASE
+**Definición corta:** Modelo de consistencia alternativo a ACID: **B**asically **A**vailable, **S**oft state, **E**ventually consistent.
+
+**En la práctica:** describe el comportamiento de sistemas distribuidos que priorizan disponibilidad sobre consistencia inmediata (ver [CAP Theorem](#cap-theorem)): el sistema está básicamente disponible, su estado puede cambiar incluso sin entrada, y converge a la consistencia con el tiempo. Es el modelo de DynamoDB, Cassandra y la mayoría de NoSQL.
+
+**Contraste con:** [ACID](#acid) · **Relacionado con:** [Consistencia eventual](#consistencia-eventual) · **Profundizado en:** Módulos 05 y 10
+
+---
+
+## C
+
+### Cache-Aside (patrón de caché)
+**Definición corta:** Patrón donde la aplicación consulta primero la caché; en caso de miss, lee de la base de datos, guarda en caché y devuelve el dato.
+
+**En la práctica:** es el patrón de caché más común (típicamente con Redis o ElastiCache). Ventajas: simple, la caché solo contiene lo que se usa. Problemas: el primer acceso es lento (cache miss), datos potencialmente obsoletos (requiere TTL o invalidación), y riesgo de *cache stampede* si muchos requests golpean un miss simultáneo (mitigar con locks o request coalescing).
+
+**Relacionado con:** [Read-Through](#read-through-patrón-de-caché) · [Write-Through](#write-through-patrón-de-caché) · [Write-Behind](#write-behind-patrón-de-caché) · **Profundizado en:** Módulo 10
+
+### CAP Theorem
+**Definición corta:** En un sistema distribuido, ante una partición de red (**P**), debes elegir entre consistencia (**C**) y disponibilidad (**A**); no puedes tener ambas.
+
+**En la práctica:**
+- **CP (consistencia + tolerancia a particiones):** el sistema rechaza operaciones si no puede garantizar datos correctos (ej: HBase, etcd, Zookeeper). Útil para configuración de cluster, locks distribuidos.
+- **AP (disponibilidad + tolerancia a particiones):** el sistema responde siempre, aunque los datos puedan estar desactualizados (ej: DynamoDB, Cassandra, CouchDB). Útil para carritos de compra, sesiones, catálogos.
+
+El teorema se malinterpreta a menudo: **C y A solo entran en conflicto durante una partición**. En operación normal puedes tener ambas. Esa matización la formaliza [PACELC](#pacelc).
+
+**Relacionado con:** [PACELC](#pacelc) · [BASE](#base) · [Consistencia eventual](#consistencia-eventual) · **Profundizado en:** Módulos 01, 05 y 10
+
+### Circuit Breaker
+**Definición corta:** Patrón que envuelve llamadas a un servicio externo: si los fallos superan un umbral, el circuito "se abre" y las llamadas fallan inmediatamente sin intentar la conexión.
+
+**En la práctica:** estados: **Cerrado** (normal, los fallos se cuentan) → **Abierto** (rechazo inmediato, protege al servicio degradado) → **Semi-abierto** (tras un timeout, deja pasar algunas llamadas de prueba; si funcionan, se cierra). Evita que un servicio caído colapse a sus llamadores (agotando sus threads/conexiones) y le da tiempo a recuperarse. Implementaciones: Polly (.NET), Resilience4j (Java), está integrado en service meshes como Istio.
+
+**Relacionado con:** [Retry](#retry) · **Profundizado en:** Módulo 10
+
+### Clean Architecture
+**Definición corta:** Arquitectura en capas concéntricas de Robert C. Martin donde las dependencias apuntan siempre hacia el centro (el dominio), nunca hacia afuera.
+
+**En la práctica:** capas de dentro hacia fuera: **Entidades** (reglas de negocio del dominio) → **Casos de uso** (lógica de aplicación) → **Adaptadores de interfaz** (controladores, presentadores, gateways) → **Frameworks y drivers** (HTTP, bases de datos, UI). La regla clave: el dominio no conoce ni importa nada del exterior; puedes cambiar la base de datos o el framework web sin tocar la lógica de negocio.
+
+**Relacionado con:** [Hexagonal Architecture](#hexagonal-architecture) · [Onion Architecture](#onion-architecture) · **Profundizado en:** Módulo 01
+
+### Consistencia eventual
+**Definición corta:** Garantía de que, si no hay nuevas escrituras, todas las réplicas de un dato convergerán al mismo valor en algún momento.
+
+**En la práctica:** "eventual" suele ser milisegundos, pero puede ser más. Implica que una lectura inmediatamente después de una escritura puede devolver el valor antiguo (**read-your-writes** no garantizado). Estrategias para manejarlo: lecturas consistentes opcionales (más caras), sticky sessions, versionado de datos, o diseñar la UI para que tolere el delay (ej: "tu pedido se está procesando"). Es el modelo por defecto de DynamoDB (las lecturas fuertemente consistentes cuestan el doble).
+
+**Relacionado con:** [BASE](#base) · [CAP Theorem](#cap-theorem) · **Profundizado en:** Módulos 05 y 10
+
+### Consistent Hashing
+**Definición corta:** Técnica de distribución de claves donde añadir o quitar un nodo solo reubica ~1/N de las claves (en lugar de rehashear todo como con `key % N`).
+
+**En la práctica:** nodos y claves se mapean a puntos de un anillo hash (0–2³²); cada clave pertenece al siguiente nodo en el sentido de las agujas del reloj. Los **nodos virtuales** (cada nodo físico ocupa varios puntos del anillo) equilibran la distribución. Lo usan DynamoDB internamente, Cassandra, Memcached, y los balanceadores de caché. Es la respuesta estándar en entrevistas para "¿cómo distribuyes claves en una caché/shard que puede escalar?"
+
+**Relacionado con:** [Sharding](#sharding) · **Profundizado en:** Módulos 05 y 14
+
+### CQRS (Command Query Responsibility Segregation)
+**Definición corta:** Patrón que separa el modelo de escritura (commands, que cambian estado) del modelo de lectura (queries, que lo consultan).
+
+**En la práctica:** las escrituras van a un modelo optimizado para consistencia y reglas de negocio; las lecturas van a modelos desnormalizados optimizados para consulta (pueden ser otras tablas, otra base de datos, o vistas materializadas). Los modelos se sincronizan por eventos (perfecto compañero de [Event Sourcing](#event-sourcing)). **Advertencia senior:** CQRS añade mucha complejidad (consistencia eventual entre modelos, más infraestructura); úsalo cuando lecturas y escrituras tienen requisitos radicalmente distintos, no por defecto.
+
+**Relacionado con:** [Event Sourcing](#event-sourcing) · **Profundizado en:** Módulo 03
+
+---
+
+## D
+
+### DDD (Domain-Driven Design)
+**Definición corta:** Enfoque de diseño de software (Eric Evans) que pone el dominio del negocio en el centro, modelándolo con un lenguaje ubicuo compartido entre técnicos y expertos del negocio.
+
+**En la práctica:**
+- **Estratégico:** Bounded Contexts (límites donde un modelo es válido), Context Maps (relaciones entre contextos), Ubiquitous Language.
+- **Táctico:** Entities (identidad), Value Objects (inmutables, sin identidad), Aggregates (fronteras de consistencia transaccional), Repositories, Domain Services, Domain Events.
+
+Mapeo clave con microservicios: **cada Bounded Context es un candidato natural para un microservicio**.
+
+**Profundizado en:** Módulo 02
+
+### Distributed Tracing
+**Definición corta:** Técnica que sigue una petición a través de todos los servicios que toca, asignándole un trace ID único que se propaga en los headers.
+
+**En la práctica:** un *trace* se compone de *spans* (unidades de trabajo con inicio, duración y metadata; anidados). El estándar de facto es **OpenTelemetry** (OTel), que unifica traces, métricas y logs; los datos se visualizan en Jaeger, Zipkin, X-Ray, Datadog, etc. Los headers de propagación estándar son W3C Trace Context (`traceparent`). Sin tracing distribuido, depurar latencia en microservicios es adivinanza.
+
+**Relacionado con:** Observabilidad · **Profundizado en:** Módulo 07
+
+---
+
+## E
+
+### Event Sourcing
+**Definición corta:** Patrón donde el estado de la aplicación se deriva de una secuencia inmutable de eventos almacenados, en lugar de almacenar solo el estado actual.
+
+**En la práctica:** en lugar de `UPDATE balance = 500`, guardas `DepositoRealizado(200)`, `RetiroRealizado(50)`… El estado actual se reconstruye reproduciendo los eventos (los *snapshots* aceleran el replay). Beneficios: auditoría completa gratis, time-travel (estado en cualquier punto), replay para corregir bugs o repoblar proyecciones. Costes: curva de aprendizaje, migración de eventos (versionado de schema), troubleshooting más difícil. Se combina naturalmente con [CQRS](#cqrs-command-query-responsibility-segregation).
+
+**Profundizado en:** Módulo 03
+
+### Exactly-once (semántica de entrega)
+**Definición corta:** Garantía (aparente) de que cada mensaje se procesa exactamente una vez: ni perdido ni duplicado.
+
+**En la práctica — lo que un senior debe saber:** **exactly-once real de extremo a extremo no existe** en sistemas distribuidos generales (es una consecuencia del problema de los dos generales). Lo que sí existe:
+- **Effectively-once:** combinación de deduplicación (IDs de mensaje) + [idempotencia](#idempotencia) en el consumidor, que *se comporta como* exactly-once.
+- **Exactly-once acotado:** dentro de un sistema concreto (Kafka con transacciones entre topics, SQS FIFO con Message Deduplication ID).
+
+La respuesta correcta en producción es casi siempre: at-least-once + idempotencia.
+
+**Relacionado con:** [At-least-once](#at-least-once-semántica-de-entrega) · [At-most-once](#at-most-once-semántica-de-entrega) · [Idempotencia](#idempotencia) · **Profundizado en:** Módulo 03
+
+---
+
+## F
+
+### (Fallacies of Distributed Computing)
+**Definición corta:** Ocho supuestos falsos que los programadores tienden a hacer sobre sistemas distribuidos.
+
+**Las ocho:** la red es confiable; la latencia es cero; el ancho de banda es infinito; la red es segura; la topología no cambia; hay un solo administrador; el coste de transporte es cero; la red es homogénea. Diseñar como si fueran ciertas produce sistemas frágiles: timeouts ausentes, reintentos sin límite, chatty APIs, datos sensibles sin cifrar.
+
+**Profundizado en:** Módulo 01
+
+---
+
+## G
+
+*(Se irá poblando con los módulos: GSI, GraphQL, GitOps…)*
+
+---
+
+## H
+
+### Hexagonal Architecture (Ports & Adapters)
+**Definición corta:** Arquitectura (Alistair Cockburn) donde el núcleo de la aplicación se aísla del mundo exterior mediante **puertos** (interfaces) y **adaptadores** (implementaciones concretas).
+
+**En la práctica:** el dominio define puertos de entrada (driving: lo que la app ofrece, ej: `OrderService`) y de salida (driven: lo que la app necesita, ej: `OrderRepository`, `PaymentGateway`). Los adaptadores implementan los puertos para tecnologías concretas: REST controller, PostgreSQL, Stripe, SQS. Puedes intercambiar adaptadores (y probar el dominio con adaptadores de test) sin tocar el núcleo. Conceptualmente equivalente a [Clean Architecture](#clean-architecture) y [Onion Architecture](#onion-architecture): las tres son "arquitecturas centradas en el dominio".
+
+**Profundizado en:** Módulo 01
+
+---
+
+## I
+
+### Idempotencia
+**Definición corta:** Propiedad de una operación por la cual ejecutarla múltiples veces produce el mismo resultado que ejecutarla una vez.
+
+**En la práctica:** es *la* propiedad más importante en sistemas distribuidos, porque la red reintenta, los mensajes se duplican ([at-least-once](#at-least-once-semántica-de-entrega)) y los usuarios hacen doble clic. Técnicas:
+- **Idempotency keys:** el cliente genera un ID único por operación (Stripe lo popularizó en su API); el servidor guarda el resultado y devuelve la misma respuesta ante repeticiones.
+- **Deduplicación:** SQS FIFO, Kafka con IDs.
+- **Operaciones naturalmente idempotentes:** `PUT`, `DELETE` en REST; upserts en bases de datos.
+- **Claves de condición:** conditional writes en DynamoDB.
+
+**Relacionado con:** [At-least-once](#at-least-once-semántica-de-entrega) · [Exactly-once](#exactly-once-semántica-de-entrega) · **Profundizado en:** Módulos 03 y 09
+
+---
+
+## J
+
+### JWT (JSON Web Token)
+**Definición corta:** Estándar (RFC 7519) para transmitir claims firmados como JSON compacto, con estructura `header.payload.signature`.
+
+**En la práctica:** el servidor emite un JWT firmado (típicamente RS256/ES256 con clave asimétrica) tras autenticar al usuario; el cliente lo envía en `Authorization: Bearer <token>`; los servicios lo validan localmente con la clave pública, sin llamar al servidor de auth. Claims estándar: `iss`, `sub`, `aud`, `exp`, `iat`. Puntos críticos de seguridad: validar siempre firma y `exp`/`aud`, nunca confiar en `alg: none`, tokens de corta vida + refresh tokens, y recordar que **no se pueden revocar individualmente** sin estado adicional (blocklist o versiones).
+
+**Relacionado con:** OAuth2 / OIDC · **Profundizado en:** Módulo 08
+
+---
+
+## L
+
+### Leader Election
+**Definición corta:** Proceso por el cual los nodos de un cluster acuerdan cuál de ellos ejerce como coordinador (leader).
+
+**En la práctica:** el leader se usa para decisiones que requieren un único punto de decisión: asignar trabajos, secuenciar escrituras, coordinación. Algoritmos: Raft, Paxos, o servicios de consenso externos (etcd, Zookeeper) con leases. Trade-offs: el leader puede ser cuello de botella y single point of failure (mitigado con re-elección automática). En entrevistas, es la respuesta a "¿cómo coordinas N workers para que solo uno ejecute cada tarea?"
+
+**Relacionado con:** [Leader/Follower](#leaderfollower-replication) · **Profundizado en:** Módulo 10
+
+### Leader/Follower (replication)
+**Definición corta:** Modelo de replicación donde un nodo (leader) acepta todas las escrituras y las propaga a los followers, que sirven lecturas.
+
+**En la práctica:** la replicación puede ser **síncrona** (el leader confirma solo cuando el follower persiste: más consistente, más latente) o **asíncrona** (el leader confirma inmediatamente: más rápido, riesgo de perder datos si el leader cae). Problemas clásicos: replication lag (el follower devuelve datos viejos → [consistencia eventual](#consistencia-eventual)), y lo que pasa si el leader muere con escrituras no replicadas (split-brain → [Leader Election](#leader-election)). Así funcionan PostgreSQL (streaming replication), MySQL, y las read replicas de RDS.
+
+**Relacionado con:** [Replication](#replication) · **Profundizado en:** Módulos 05 y 10
+
+---
+
+## M
+
+### (Microservicios)
+**Definición corta:** Estilo arquitectónico donde la aplicación se estructura como servicios pequeños, autónomos, desplegables independientemente, modelados alrededor de dominios de negocio.
+
+**En la práctica:** las ventajas (despliegue y escalado independientes, equipos autónomos, heterogeneidad tecnológica) tienen un precio: complejidad operativa, red entre componentes, transacciones distribuidas ([Saga](#saga)), observabilidad obligatoria. Regla senior: *no empieces con microservicios*; un monolito modular bien hecho es mejor punto de partida, y los límites correctos vienen de [DDD](#ddd-domain-driven-design).
+
+**Profundizado en:** Módulo 02
+
+---
+
+## N
+
+### (NoSQL)
+**Definición corta:** Familia de bases de datos que abandonan el modelo relacional para ganar escalabilidad horizontal, flexibilidad de esquema o rendimiento en cargas específicas.
+
+**Tipos:** clave-valor (DynamoDB, Redis), documentales (MongoDB, DocumentDB), columnares (Cassandra, HBase), grafos (Neo4j, Neptune). El punto clave: NoSQL no significa "sin estructura", significa **modelar según los patrones de acceso** en lugar de normalizar; y aceptar trade-offs de consistencia ([BASE](#base)) a cambio de escala y disponibilidad ([CAP](#cap-theorem)).
+
+**Profundizado en:** Módulo 05
+
+---
+
+## O
+
+### Observabilidad
+**Definición corta:** Capacidad de entender el estado interno de un sistema a partir de sus salidas externas: métricas, logs y traces (los "tres pilares").
+
+**En la práctica:** monitoring te dice *que* algo falla (dashboards sobre fallos conocidos); observabilidad te deja investigar *por qué* falla algo que nunca habías visto. En sistemas distribuidos requiere: [distributed tracing](#distributed-tracing), logs estructurados con correlation IDs, métricas RED (Rate, Errors, Duration) por servicio, y SLIs/SLOs en lugar de alarmas arbitrarias.
+
+**Profundizado en:** Módulo 07
+
+### Onion Architecture
+**Definición corta:** Arquitectura en capas concéntricas (Jeffrey Palermo) donde el núcleo es el modelo de dominio, rodeado por servicios de dominio, servicios de aplicación y finalmente infraestructura/UI.
+
+**En la práctica:** conceptualmente equivalente a [Hexagonal](#hexagonal-architecture-ports--adapters) y [Clean Architecture](#clean-architecture): las dependencias apuntan hacia adentro; la infraestructura depende del dominio, nunca al revés; el orden de las capas interiores difiere ligeramente entre las tres variantes, pero el principio es el mismo.
+
+**Profundizado en:** Módulo 01
+
+### Outbox (patrón / Transactional Outbox)
+**Definición corta:** Patrón para publicar eventos de forma fiable: el evento se guarda en una tabla "outbox" **en la misma transacción** que el cambio de estado, y un proceso separado lo publica al bus de mensajes.
+
+**En la práctica:** resuelve el problema del **dual write**: si escribes en la base de datos y luego publicas a SQS/Kafka (o al revés), un fallo entre ambos pasos deja el sistema inconsistente (el pago se guardó pero nunca se emitió el evento, o viceversa). Con outbox, la escritura es atómica; un relay (CDC con Debezium, o un Lambda que hace polling) publica después, garantizando [at-least-once](#at-least-once-semántica-de-entrega). Los consumidores deben ser [idempotentes](#idempotencia).
+
+**Relacionado con:** [Saga](#saga) · **Profundizado en:** Módulo 03
+
+---
+
+## P
+
+### PACELC
+**Definición corta:** Extensión del teorema CAP: **si hay Partición**, eliges entre Disponibilidad (A) y Consistencia (C); **en caso contrario (Else)**, eliges entre Latencia (L) y Consistencia (C).
+
+**En la práctica:** CAP solo cubre el comportamiento durante particiones; PACELC captura el trade-off del día a día: replicación síncrosa (consistente pero lenta) vs. asíncrona (rápida pero eventualmente consistente). Ejemplos: DynamoDB es PA/EL (disponible y baja latencia por defecto); PostgreSQL con replicación síncrona es PC/EC; muchos sistemas permiten elegir **por operación** (lectura consistente en DynamoDB cuesta el doble de RCUs).
+
+**Relacionado con:** [CAP Theorem](#cap-theorem) · [Consistencia eventual](#consistencia-eventual) · **Profundizado en:** Módulos 05 y 10
+
+---
+
+## R
+
+### Rate Limiting
+**Definición corta:** Control del número de peticiones que un cliente puede hacer en una ventana de tiempo.
+
+**En la práctica:** algoritmos clásicos: **token bucket** (ráfagas permitidas hasta vaciar el bucket — el de API Gateway), **leaky bucket** (ritmo de salida constante), **fixed window** (simple, con problema en los bordes de ventana), **sliding window log/counter** (preciso, más memoria). Respuestas: `429 Too Many Requests` con header `Retry-After`. Decisiones senior: por usuario vs. por IP vs. global, dónde aplicarlo (borde con API Gateway/WAF vs. aplicación), y límites diferenciados por plan (free vs. premium).
+
+**Profundizado en:** Módulos 09 y 10
+
+### Replication
+**Definición corta:** Mantener copias del mismo dato en múltiples nodos para mejorar disponibilidad, durabilidad y rendimiento de lectura.
+
+**En la práctica:** modelos principales: [Leader/Follower](#leaderfollower-replication) (un escritor, lectores escalables), multi-leader (escritura en varios nodos; resolución de conflictos), y leaderless (quórum de lectura/escritura: `R + W > N`, estilo Cassandra/Dynamo). Decisiones: síncrona vs. asíncrona (ver [PACELC](#pacelc)), cuántas réplicas, y cómo leer (seguidores con posible lag vs. lecturas consistentes al leader).
+
+**Relacionado con:** [Consistencia eventual](#consistencia-eventual) · [Sharding](#sharding) · **Profundizado en:** Módulos 05 y 10
+
+### Retry
+**Definición corta:** Reintentar una operación fallida, típicamente con backoff exponencial y jitter (aleatoriedad) para no sincronizar reintentos de muchos clientes.
+
+**En la práctica — reglas senior:**
+- Solo reintentar errores **transitorios** (timeout, 5xx, throttling); nunca errores definitivos (4xx de validación).
+- Siempre con límite de intentos y **backoff exponencial + jitter** (el patrón de AWS: `min(rand(0, base × 2^intento), tope)`).
+- Reintentar solo operaciones [idempotentes](#idempotencia), o asegurar idempotencia por otro medio.
+- Combinar con [Circuit Breaker](#circuit-breaker): reintentos contra un servicio caído solo lo hunden más.
+
+**Profundizado en:** Módulo 10
+
+---
+
+## S
+
+### Saga
+**Definición corta:** Patrón para mantener consistencia en transacciones que cruzan varios servicios: una secuencia de transacciones locales donde cada paso tiene una **transacción de compensación** que deshace su efecto si falla un paso posterior.
+
+**En la práctica — ejemplo:** pedido de delivery: 1) reservar pago → 2) confirmar restaurante → 3) asignar repartidor. Si falla (3), se ejecutan las compensaciones: cancelar reserva con el restaurante, liberar el pago. Dos estilos:
+- **Coreografía:** cada servicio emite eventos y escucha los de otros; descentralizado, simple con pocos pasos, difícil de rastrear con muchos.
+- **Orquestación:** un orquestador (Step Functions es ideal) dirige los pasos; más visible y testeable, con un punto lógico central.
+
+No hay rollback real (los datos ya fueron commit): la compensación es una operación de negocio ("reembolsar"), no un `ROLLBACK`.
+
+**Relacionado con:** [Outbox](#outbox-patrón--transactional-outbox) · **Profundizado en:** Módulo 03
+
+### Service Discovery
+**Definición corta:** Mecanismo por el que los servicios encuentran las ubicaciones (IP:puerto) de otros servicios dinámicamente, sin configuración hardcodeada.
+
+**En la práctica:** en entornos cloud/containers las IPs cambian constantemente. Modelos: **client-side** (el cliente consulta el registro — Eureka) vs. **server-side** (un balanceador consulta el registro — ALB + Cloud Map en AWS). En AWS: Cloud Map (DNS/API), registros en ECS, o la resolución automática de un service mesh (App Mesh). En Kubernetes, los Services + DNS interno lo resuelven nativamente.
+
+**Profundizado en:** Módulo 02
+
+### Sharding
+**Definición corta:** Particionado horizontal de datos: dividir un dataset entre múltiples nodos/shards, cada uno con un subconjunto.
+
+**En la práctica:** la decisión crítica es la **shard key**: debe distribuir uniformemente (evitar hot shards) y estar presente en las consultas frecuentes (las consultas cross-shard son caras). Estrategias: por rango (fácil de recorrer, riesgo de hotspots), por hash (uniforme, no ordenado — ver [Consistent Hashing](#consistent-hashing)), por directorio (flexible, con paso extra). En DynamoDB es automático vía Partition Key; entender sus hot partitions es un tema central del Módulo 05.
+
+**Relacionado con:** [Replication](#replication) · **Profundizado en:** Módulos 05 y 10
+
+### SOLID
+**Definición corta:** Cinco principios de diseño orientado a objetos (Robert C. Martin): Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion.
+
+**En la práctica:** a nivel senior se espera aplicarlos más allá de las clases: SRP → un microservicio tiene una razón de cambio; OCP → extender vía plugins/adaptadores (ver [Hexagonal](#hexagonal-architecture-ports--adapters)); LSP → las implementaciones de un puerto deben ser intercambiables; ISP → APIs pequeñas y específicas por cliente; DIP → el dominio nunca depende de infraestructura. SOLID es, en el fondo, por qué funcionan las arquitecturas centradas en el dominio.
+
+**Profundizado en:** Módulo 01
+
+---
+
+## T
+
+### Twelve-Factor App
+**Definición corta:** Metodología de Heroku con 12 prácticas para construir aplicaciones cloud/SaaS portables y escalables.
+
+**Las 12 (resumen senior):** codebase única en control de versiones; dependencias explícitas; **configuración en variables de entorno** (nunca en el código); backing services como recursos adjuntos; build/release/run separados estrictamente; procesos **stateless** (el estado vive en backing services); port binding (la app se autoexpone); concurrencia por escalado de procesos; **disposability** (arranque rápido, shutdown limpio); paridad dev/staging/prod; logs como flujos de eventos a stdout; procesos admin como one-off. Es la base filosófica de containers, serverless y Kubernetes.
+
+**Profundizado en:** Módulo 01
+
+---
+
+## V
+
+### Vertical Slice Architecture
+**Definición corta:** Organización del código por **features** (cada slice contiene todo lo necesario para una funcionalidad: endpoint, lógica, acceso a datos) en lugar de por capas técnicas.
+
+**En la práctica:** contraste con capas horizontales (`Controllers/`, `Services/`, `Repositories/`). Cada feature es un módulo autocontenido que acopla mínimamente con otros; añadir una feature = añadir una carpeta, sin tocar código existente. Combina bien con el patrón Mediator (MediatR) y con microservicios, donde cada servicio ya es un slice del negocio. Regla práctica: usa organización por capas dentro de cada slice si la feature es compleja; no fuerces capas globales.
+
+**Relacionado con:** [Clean Architecture](#clean-architecture) · **Profundizado en:** Módulo 01
+
+---
+
+## W
+
+### Write-Behind / Write-Back (patrón de caché)
+**Definición corta:** La aplicación escribe solo en la caché; la persistencia en la base de datos se hace de forma asíncrona después.
+
+**En la práctica:** escrituras muy rápidas y se absorben picos (buffer natural), pero hay **riesgo de pérdida de datos** si la caché cae antes del flush, y la complejidad aumenta (colas, orden, reconciliación). Apropiado para escrituras masivas tolerantes a pérdida (contadores, telemetría, likes).
+
+**Relacionado con:** [Write-Through](#write-through-patrón-de-caché) · [Cache-Aside](#cache-aside-patrón-de-caché) · **Profundizado en:** Módulo 10
+
+### Write-Through (patrón de caché)
+**Definición corta:** Cada escritura se aplica a la caché y a la base de datos de forma síncrona (típicamente, la librería de caché lo hace transparente).
+
+**En la práctica:** la caché siempre está fresca y las lecturas nunca dan miss tras una escritura, pero la latencia de escritura aumenta y se cachean datos que quizá nunca se lean (combinable con TTL). Compañero natural de [Read-Through](#read-through-patrón-de-caché).
+
+**Relacionado con:** [Cache-Aside](#cache-aside-patrón-de-caché) · **Profundizado en:** Módulo 10
+
+---
+
+### Read-Through (patrón de caché)
+**Definición corta:** En un cache miss, es la propia capa de caché (no la aplicación) la que lee de la base de datos, guarda el resultado y lo devuelve.
+
+**En la práctica:** la aplicación simplifica su lógica (solo habla con la caché) y el *cache stampede* se mitiga porque la capa de caché puede coordinar el miss. Requiere que el proveedor de caché soporte el patrón (o una librería intermedia); menos común que [Cache-Aside](#cache-aside-patrón-de-caché) en stacks cloud, donde Redis/Memcached son almacenes "tontos".
+
+**Profundizado en:** Módulo 10
