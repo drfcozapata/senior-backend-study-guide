@@ -193,6 +193,51 @@ Cognito soluciona **autenticación** y **director de usuarios** sin que construy
 
 ### 1. Diseño de aplicación serverless típica
 
+La vista general del stack serverless (renderizada en GitHub):
+
+```mermaid
+flowchart TD
+    Client["Cliente<br/>(Web / Mobile)"]
+    CF["CloudFront<br/>(CDN)"]
+
+    subgraph EDGE["Edge Layer"]
+        APIGW["API Gateway<br/>(HTTP API)"]
+        COG["Cognito<br/>(JWT Authorizer)"]
+    end
+
+    subgraph COMPUTE["Compute (Lambda)"]
+        FN1["fn-orders<br/>(REST Handler)"]
+        FN2["fn-email<br/>(Notification)"]
+        FN3["fn-image<br/>(Processing)"]
+    end
+
+    subgraph STATE["State Management"]
+        DDB[("DynamoDB<br/>Orders")]
+        S3[("S3<br/>Assets")]
+    end
+
+    subgraph ORCHESTRATION["Orchestration & Events"]
+        EB["EventBridge<br/>(Bus + Rules)"]
+        SF["Step Functions<br/>(Order Saga)"]
+        SQS["SQS Queue<br/>(Heavy Tasks)"]
+    end
+
+    Client -->|HTTPS| CF
+    CF --> APIGW
+    APIGW --> COG
+    APIGW -->|Proxy| FN1
+
+    FN1 -->|PutItem| DDB
+    FN1 -->|Publish Event| EB
+    EB -->|RuleMatch| SF
+    EB -->|RuleMatch| SQS
+    SQS --> FN3
+    SF --"Tasks"--> FN2
+    FN3 -.->|Fetch/Save| S3
+```
+
+*(Versión alternativa en texto plano para editores sin Mermaid:)*
+
 ```
 ┌─────────┐    ┌─────────────┐    ┌────────────┐    ┌────────────┐    ┌─────────┐
 │ Client  │───▶│  Route 53   │───▶│  API GW    │───▶│ Lambda     │───▶│DynamoDB │
@@ -565,6 +610,21 @@ Compare standard workflow vs express:
 - [ ] Entiendo límites de payload (API GW 10MB, SQS 256KB, Lambda 6MB direct sync).
 - [ ] He implementado HTTPS redirects /authentication offload at CloudFront/API GW layer.
 - [ ] He calculado cost estimation de un workload serverless previsualemente.
+
+---
+
+## Referencias y lecturas recomendadas
+
+- **AWS — What is AWS Lambda / Serverless** — https://aws.amazon.com/lambda/ y https://aws.amazon.com/serverless/
+- **AWS — Serverless Applications Lens (Well-Architected)** — https://docs.aws.amazon.com/wellarchitected/latest/serverless-applications-lens/
+- **AWS — "Dynamo: Amazon's Highly Available Key-value Store"** — DeCandia et al., 2007, https://www.allthingsdistributed.com/2022/11/amazon-2022-recap-dynamodb.html
+- **AWS Samples — AWS Lambda Power Tuning** — https://github.com/aws-samples/aws-lambda-power-tuning (herramienta de optimización de memoria/costo).
+- **AWS — Amazon State Language (ASL)** — https://states-language.net/
+- **AWS — EventBridge vs SNS vs SQS** — https://aws.amazon.com/blogs/compute/sqs-vs-sns-vs-eventbridge/
+- **AWS — AWS Lambda Limits** — https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+- **AWS — Getting started with Amazon Cognito** — https://docs.aws.amazon.com/cognito/latest/developerguide/getting-started.html
+- **"Serverless Architectures on AWS"** — Peter Sbarski (Manning). Libro de patrones serverless.
+- **YouTube — "AWS re:Invent Serverless" talks** — https://www.youtube.com/results?search_query=aws+reinvent+serverless+dynamodb
 
 ---
 

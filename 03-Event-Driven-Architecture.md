@@ -207,6 +207,44 @@ Estos patrones EDA se detallan históricamente en el [Glosario](00-Glosario.md) 
 
 Ya descrito en Módulo 02. **Novedad de profundidad en EDA:**
 
+El siguiente diagrama muestra el flujo completo: la escritura atómica con **Transactional Outbox** (evitando el dual write) y la **Saga orquestada** con sus pasos y compensaciones:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant API as API Gateway
+    participant O as Order Service
+    participant DB as PostgreSQL
+    participant OB as Outbox Worker
+    participant EB as EventBridge/SNS
+    participant P as Payment Service
+    participant I as Inventory Service
+    participant SF as Step Functions (Saga)
+
+    C->>API: POST /orders
+    API->>O: createOrder()
+    O->>DB: BEGIN TX
+    O->>DB: INSERT orders
+    O->>DB: INSERT outbox (OrderCreated, PENDING)
+    O->>DB: COMMIT
+    Note over O,DB: Escritura atómica (dual write evitado)
+
+    OB->>DB: SELECT * FROM outbox WHERE status='PENDING'
+    OB->>EB: publish OrderCreated
+    OB->>DB: UPDATE outbox SET status='SENT'
+
+    EB->>SF: StartExecution (Saga)
+    SF->>I: ReserveStock
+    I-->>SF: OK / StockReserved
+    SF->>P: AuthorizePayment
+    P-->>SF: OK / PaymentAuthorized
+    SF->>O: ConfirmOrder
+    Note over SF: Si falla un paso,<br/>se ejecutan las compensaciones<br/>(VoidPayment, ReleaseStock)
+
+    EB-->>C: WebSocket /notification
+```
+
 - **Choreography:** sin coordinador. Cada paso escucha evento y dispara el siguiente. Simple, pero el flujo vive en la red de eventos (difícil de leer/modificar). Bueno cuando pocos pasos/estados.
 - **Orchestration:** coordinador explícito que mantiene el estado del saga (orden state machine) y ordena steps. En AWS, este rol natural lo desempeña **Step Functions** (Módulo 04), con estados y transiciones gestionadas, máximo timeout/maxRetries y visible en la consola.
 
@@ -217,6 +255,34 @@ Ya descrito en Módulo 02. **Novedad de profundidad en EDA:**
 ### CQRS
 
 Separación **modelo de escritura** y **lectura**. En EDA encaja natural: Write side emite eventos cuando cambia; Read side se **consume esos eventos** y mantiene proyecciones (read models) optimizadas/Denormalizadas.
+
+```mermaid
+flowchart LR
+    UI[UI/API]
+    subgraph WRITE["Write Side (Commands)"]
+        CMD[Command Handler]
+        AR[Aggregate Root]
+        EVT[(Event Store<br/>Kafka/Streams)]
+        CMD --> AR
+        AR --> EVT
+    end
+
+    subgraph READ["Read Side (Queries)"]
+        P1[(Proyección: Vista órdenes)]
+        P2[(Proyección: Vista cliente)]
+        P3[(Elasticsearch/Search)]
+        Q[Query Handler]
+    end
+
+    EVT --> P1
+    EVT --> P2
+    EVT --> P3
+    P1 --> Q
+    P2 --> Q
+    P3 --> Q
+    UI --> Q
+    UI --> CMD
+```
 
 **Beneficios claros:** escalas lectura independiente, modelos de búsqueda flexibles, histórico.
 **Costes: consistencia eventual obvia entre la lectura y comando**, esquemas de evento estables (versionado), monitoreo de atraso del consumidor.
@@ -357,6 +423,19 @@ Diseña la definición ASL (Amazon States Language) del Saga del Lab 1, con paso
 - [ ] Tengo claro el rol de EventBridge, SNS, SQS, Kafka entre routing/streaming.
 - [ ] Sé cuándo CQRS y Event Sourcing valen su costo.
 - [ ] Sé observar un sistema EDA (lag, DLQ, correlation traces).
+
+---
+
+## Referencias y lecturas recomendadas
+
+- **"Building Event-Driven Microservices: Leveraging Organizational Data at Scale"** — Adam Bellemare (O'Reilly, 2020). Referencia canónica de EDA con Kafka.
+- **"Designing Data-Intensive Applications"** — Martin Kleppmann (O'Reilly, 2017). Capítulos de consistencia, particionado y semánticas de entrega (el mejor libro para exactly-once, CAP, cadenas de replicación).
+- **"Enterprise Integration Patterns" (EIP)** — Gregor Hohpe & Bobby Woolf (Addison-Wesley, 2003). El catálogo clásico de patrones de mensajería (Message Queue, Pub/Sub, Correlation, Dead Letter).
+- **"Microservices Patterns"** — Chris Richardson (Manning, 2018). Cooperación, transacciones distribuidas, Saga, CQRS.
+- **Martin Fowler — Event Sourcing / CQRS** — https://martinfowler.com/eaaDev/EventSourcing.html y https://martinfowler.com/bliki/CQRS.html
+- **Databases in the Wild: Transactional Outbox Pattern** — https://microservices.io/patterns/data/transactional-outbox.html
+- **AWS — SQS Standard vs FIFO** — https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-standard-queues.html
+- **AWS — EventBridge vs SNS vs SQS trade-offs** — https://aws.amazon.com/blogs/compute/sqs-vs-sns-vs-eventbridge/
 
 ---
 

@@ -258,6 +258,58 @@ Marco moderno: 4 tipos de equipos:
 
 Cómo se comunican los servicios determina la resiliencia del sistema completo. Dos grandes familias:
 
+```mermaid
+flowchart TD
+    Client["Cliente"]
+
+    subgraph EDGE["Edge Layer"]
+        GW["API Gateway / BFF"]
+    end
+
+    subgraph CORE["Servicios Core (bounded contexts)"]
+        US["User Service"]
+        PS["Product Service"]
+        OS["Order Service"]
+    end
+
+    subgraph ASYNC_BUS["Bus de Eventos"]
+        EB[("Amazon EventBridge")]
+        SQS[("Amazon SQS")]
+        SNS[("SNS Topic")]
+    end
+
+    subgraph WORKERS["Consumidores Asíncronos"]
+        INV["Inventory Worker"]
+        NOT["Notification Worker"]
+        AUD["Audit/Elastic"]
+    end
+
+    subgraph DATA["Persistencia"]
+        US_DB[("PostgreSQL")]
+        PROD_DB[("DynamoDB")]
+        ORD_DB[("Aurora")]
+        REDIS[("ElastiCache")]
+    end
+
+    Client -->|REST/HTTPS| GW
+    GW -->|/users| US
+    GW -->|/products| PS
+    GW -->|/orders| OS
+
+    OS -.->|AuthN/OIDC| US
+
+    OS -->|Domain Event: OrderCreated| EB
+    EB --> SQS
+    SQS --> INV
+    SNS --> NOT
+    EB -.-> AUD
+
+    US --> US_DB
+    PS --> PROD_DB
+    OS --> ORD_DB
+    PS -.-> REDIS
+```
+
 ### Comunicación síncrona (request-response)
 
 Aparece cuando hace falta una respuesta en plazo de llamada. **Pero introduce acoplamiento temporal**: si el downstream cae o responde lento, el llamador se degrada igual. Hay que defenderer con timeouts, retries y circuit breakers.
@@ -581,6 +633,21 @@ Con Pact, crea un test que falle: `OrderService` espera `items.priceCents` en la
 - [ ] Diferencia **autenticación vs autorización**.
 - [ ] Con de **Zero Trust**.
 - [ ] Reconocer **Eventual vs Strong** en requerimientos financieros.
+
+---
+
+## Referencias y lecturas recomendadas
+
+- **"Building Microservices: Designing Fine-Grained Systems"** — Sam Newman (O'Reilly, 2nd ed., 2021). La referencia canónica del módulo.
+- **"Monolith to Microservices: Evolutionary Patterns to Transform Your Monolith"** — Sam Newman (O'Reilly, 2019). Estrategias de migración (strangler fig, decomposition patterns).
+- **"Domain-Driven Design: Tackling Complexity in the Heart of Software"** — Eric Evans (Addison-Wesley, 2003). El "Blue Book" que originó todo el diseño por dominios.
+- **"Implementing Domain-Driven Design"** — Vaughn Vernon (Addison-Wesley, 2013). La versión práctica del DDD táctico.
+- **"Team Topologies: Organizing Business and Technology Teams for Fast Flow"** — Matthew Skelton & Manuel Pais (IT Revolution, 2019). Conway's Law moderno y tipos de equipos.
+- **"Designing Data-Intensive Applications"** — Martin Kleppmann (O'Reilly, 2017). Capítulos de comunicación, consistencia y particionado.
+- **Martin Fowler — Microservices** — https://martinfowler.com/articles/microservices.html (el ensayo fundacional de James Lewis y Martin Fowler).
+- **Martin Fowler — BoundedContext / UbiquitousLanguage** — https://martinfowler.com/bliki/BoundedContext.html
+- **Chris Richardson — Microservices.io** — https://microservices.io (catálogo completo de patrones de microservicios, incl. Saga, API Gateway, Database per Service).
+- **AWS Well-Architected Framework — Serverless Applications Lens** — https://docs.aws.amazon.com/wellarchitected/latest/serverless-applications-lens/
 
 ---
 

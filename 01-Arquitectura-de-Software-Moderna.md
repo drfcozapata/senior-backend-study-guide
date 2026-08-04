@@ -102,6 +102,50 @@ SOLID detallado está en Módulo 11 y se usa intensivamente en Módulo 03 (Event
 
 ## Arquitectura
 
+Antes de recorrer los estilos, este es el panorama general de la arquitectura que construiremos a lo largo de la guía (cada bloque se profundiza en su módulo):
+
+```mermaid
+flowchart TD
+    Client(("Clientes\n(Web / Mobile / Partners)"))
+
+    subgraph Edge["Capa de Entrada (Módulos 04, 09)"]
+        APIGW["API Gateway\nREST / HTTP / WebSocket\nAuth · Rate Limiting"]
+        WAF["WAF / Shield\nProtección DDoS"]
+    end
+
+    subgraph Compute["Computación (Módulo 04)"]
+        Lambda["Lambda\nLógica de negocio\nServerless"]
+        StepFn["Step Functions\nOrquestación de Sagas"]
+    end
+
+    subgraph Integration["Integración Asíncrona (Módulo 03)"]
+        EB["EventBridge\nBus de eventos"]
+        SQS["SQS\nColas de trabajo"]
+        SNS["SNS\nPub/Sub Fanout"]
+    end
+
+    subgraph Data["Persistencia (Módulo 05)"]
+        DDB[("DynamoDB\nNoSQL key-value")]
+        RDS[("RDS / Aurora\nRelacional")]
+        Cache[("ElastiCache\nRedis")]
+    end
+
+    subgraph Infra["Plataforma (Módulos 06, 07, 08, 12)"]
+        IaC["Terraform / CloudFormation\nInfraestructura como Código"]
+        Obs["CloudWatch / OTel\nObservabilidad y Trazas"]
+        Sec["IAM / Cognito\nSeguridad y Acceso"]
+    end
+
+    Client --> Edge
+    Edge --> Compute
+    Compute --> Data
+    Compute --> Integration
+    Integration --> Compute
+    Infra -.->|"despliega y gobierna"| Compute
+    Infra -.->|"monitoriza"| Edge
+    Infra -.->|"autoriza"| Compute
+```
+
 ### Evolución histórica de la arquitectura
 
 No hubo un salto mágico de Monolito a Microservicios. Cada estilo surgió arreglando un dolor real específico. Esta trayectoria cambia cómo piensas:
@@ -243,6 +287,43 @@ Incluso pioneros (bases de datos, gestión global, consistencia transaccional) d
 #### Estilo E — Arquitectura Hexagonal (Ports & Adapters)
 
 **Origen:** Alistair Cockburn. Idea central: organizar el software con puertos definidos en los límites de la aplicación (interfaz) e implementaciones adaptadas al exterior (adapters).
+
+```mermaid
+flowchart LR
+    subgraph Landscape["Panorama Arquitectónico"]
+        A[User / Cliente]
+        subgraph InfraInterfaces["Capas de Infraestructura"]
+            B[API Gateway / HTTP]
+            C[SNS/SQS/EventBridge]
+            D[CloudWatch Logging Metrics]
+        end
+        subgraph App["Aplicación / Dominio (CORE)"]
+            E["Use Cases / Handlers"]
+            F["Domain Entities & Aggregates"]
+            G["Events / Domain Events"]
+        end
+        subgraph Driving["Driving Adapters"]
+            H[REST Controller / Web]
+            I[Lambda Trigger]
+        end
+        subgraph Driven["Driven Adapters"]
+            J[Database Repository]
+            K[Message Publisher]
+            L[Payment Gateway]
+        end
+        A -->|request/event| B
+        B -->|route| H
+        C -->|listens| I
+        H --> E
+        I --> E
+        E --> F
+        E -.->|publishes| G
+        E -->|uses| J
+        E -->|uses| K
+        E -->|uses| L
+        D
+    end
+```
 
 **Elementos:**
 - **Core / Domain:** Lógica de negocio pura.

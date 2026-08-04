@@ -74,6 +74,25 @@ partición = hash(PK) % número_de_canréteros
 - El **Sort Key** permite ordenar/agrupar dentro de una misma partición y hacer range queries (BETWEEN, begins_with).
 - El dato más importante a nivel senior: **una tabla no es "un solo almacén"**: es una colección de particiones independientes, cada una con **su propio límite** de capacidad (aprox. 3000 RCU / 1000 WCU por partición).
 
+La siguiente vista resume la mecánica: las claves se reparten por hash entre particiones (con riesgo de hot partition), mientras que la técnica single-table agrupa entidades relacionadas para convertirlo todo en queries eficientes:
+
+```mermaid
+flowchart TD
+    APP["Aplicación / Lambda"]
+    PK["Partition Key (hash)"] --> A1["Partición 1"]
+    PK --> A2["Partición 2"]
+    PK --> A3["Partición 3"]
+    PK --> H["HOT PARTITION 🔥<br/>(hot key) <br/>Throttle local"]
+
+    subgraph S["Single-Table / Adjacency List"]
+        C1["PK: CUSTOMER#1<br/>SK: ORDER#100, ORDER#101, PROFILE#"]
+        C2["PK: ORDER#100<br/>SK: PRODUCT#p9, PAYMENT#200"]
+    end
+
+    APP --> PK
+    APP -->|"Query(PK=customer, SK begins_with ORDER#)"| S
+```
+
 ### Hot partitions (El enemigo nº1)
 
 Una **hot partition** ocurre cuando una sola llave se llena de tráfico. Ejemplo típico:
@@ -316,6 +335,20 @@ Dado un item de 12 KB con 50 reads/seg (eventual) y 3 writes/seg:
 - [ ] Uso TTL para vida efímera de items (sesiones, logs, push).
 - [ ] Uso `TransactWriteItems`/`ConditionExpression` para atomicidad e idempotencia.
 - [ ] Reconozco cuándo DynamoDB NO es la respuesta (joins complejos, ACID multi-aggregate, full-text).
+
+---
+
+## Referencias y lecturas recomendadas
+
+- **"Dynamo: Amazon's Highly Available Key-value Store"** — DeCandia et al., 2007. El paper fundacional que explica por qué y cómo se construyó Dynamo (fuente primaria del módulo). https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf
+- **AWS — DynamoDB Developer Guide** — https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ (operaciones, capacity, consistency, TTL, Streams, transacciones).
+- **AWS — DynamoDB Best Practices** — https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html (tabla única, hot partitions, etc.).
+- **AWS — "Designing your partition keys"** — https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html
+- **AWS — Working with Queries / GSI / LSI** — https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/SecondaryIndexes.html
+- **"DynamoDB Book" (The DynamoDB Book)** — Alex DeBrie (2020). El recurso más práctico y profundo sobre modelado single-table. https://www.dynamodbbook.com/
+- **"Designing Data-Intensive Applications"** — Martin Kleppmann (O'Reilly, 2017). Capítulos de replicación, particionado y consistencia (CAP/PACELC).
+- **AWS — DynamoDB Local** — https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html (para los laboratorios).
+- **Fowler — NoSQL & CAP** — https://martinfowler.com/articles/nosql-intro.html
 
 ---
 
