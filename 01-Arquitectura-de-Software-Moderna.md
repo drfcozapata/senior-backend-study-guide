@@ -10,11 +10,11 @@
 
 ## Introducción
 
-Si has trabajado en sistemas heredados, habrás notado que el código de **jueves a viernes** se comporta como un monstruo distinto al de lunes a miércoles. No es el humor del equipo: sucede porque **la arquitectura no es un artefacto técnico estático; es una negociación viva entre cambio constante, complejidad, trade-offs económicos y performance.**
+Si has trabajado en sistemas heredados, habrás notado que el código de **jueves a viernes** se comporta como un monstruo distinto al de lunes a miércoles. No es algo humorístico: sucede porque **la arquitectura no es un artefacto técnico estático; es una negociación viva entre cambio constante, complejidad, trade-offs económicos y performance.**
 
 En este módulo dejamos atrás el marketing de los vendors. Visualiza la arquitectura como el _"conjunto de decisiones que limitan lo que va a pasar después"_. Todo lo demás en la guía (Microservicios, DDD, Serverless, IaC, Observabilidad, Seguridad, System Design) descansa sobre estas bases. Si dominas los principios estructurales, elegir servicios específicos (por ejemplo, Amazon MSK en lugar de RabbitMQ para alto throughput de eventos, o EventBridge sobre SNS/SQS según latencia, routing y fan-out) se vuelve disciplina y no moda.
 
-Contenido de este módulo: historia, evolución, monolitos, capas, SOA, microservicios, Clean, Hexagonal, Onion, **Vertical Slice**, arquitectura dirigida por eventos, **cómo elegir una arquitectura desde criterios prácticos**, y la psicología que diferencia a un Software Developer de un Software Architect (metodología de trade-offs y frameworks de pensamiento). Al terminar, no necesitarás preguntarle a nadie "¿tú qué usarías?" para un proyecto de pagos, pedidos, delivery o IoT: lo evaluarás tú mismo con requisitos de negocio claros.
+**Contenido de este módulo**: historia, evolución, monolitos, capas, SOA, microservicios, Clean, Hexagonal, Onion, Vertical Slice, arquitectura dirigida por eventos, cómo elegir una arquitectura desde criterios prácticos, y la psicología que diferencia a un Software Developer de un Software Architect (metodología de trade-offs y frameworks de pensamiento). Al terminar, no necesitarás preguntarle a nadie "¿tú qué usarías?" para un proyecto de pagos, pedidos, delivery o IoT: lo evaluarás tú mismo con requisitos de negocio claros.
 
 ---
 
@@ -44,7 +44,7 @@ Una confusión crítica en entrevistas (y en la práctica) es mezclar:
 
 ### Falacias de la Computación Distribuida
 
-No son humor. Son ocho premisas falsas que causan _bugs y outages_ incontables. Llévalas al front-end de cualquier decisión:
+Son ocho premisas falsas que causan _bugs y outages_ incontables. Llévalas al front-end de cualquier decisión:
 
 1. **La red es confiable.** (No lo es. Usa retries, circuit breakers, timeouts.)
 2. **La latencia es cero.** (No lo es. Una llamada intra-proceso vs inter-servicio puede ser 100x–1000x diferente.)
@@ -55,9 +55,9 @@ No son humor. Son ocho premisas falsas que causan _bugs y outages_ incontables. 
 7. **El costo de transporte es cero.** (Falso. Cross-AZ y cross-region traffic cuestan dinero.)
 8. **La red es homogénea.** (Falso, Múltiples protocolos, versiones, capacidades.)
 
-Cada una se corrige con patrones de esta guía: service discovery (Módulo 02), retries/idempotencia (Módulo 03), Configuration as Code (Módulo 06), distributed tracing (Módulo 07), encryption/auth (Módulo 08), rate limiting (Módulo 09), circuit breakers (Módulo 10).
+Cada una se corrige con patrones de esta guía: Descubrimiento de Servicios (service discovery - Módulo 02), Reintentos/Idempotencia (retries/idempotencia - Módulo 03), Configuración como Código (Configuration as Code - Módulo 06), Trazabilidad Distribuida o Rastreo Distribuido (distributed tracing - Módulo 07), Cifrado y Autenticación/Autorización (encryption/auth - Módulo 08), Control de Frecuencia (rate limiting - Módulo 09), Cortacircuitos (circuit breakers - Módulo 10).
 
-**El matiz de DDIA:** más allá de las 8 falacias, la mayoría de los fallos distribuidos se reduce a **tres fuentes recurrentes de problemas**: (1) **red no fiable**, (2) **relojes no fiables** y (3) **pausas de proceso**. Si no recibes respuesta de un nodo, es **imposible distinguir** si se perdió la petición, si el nodo cayó o si se perdió la respuesta; la red y los timeouts tienen _retrasos no acotados_ (un paquete puede tardar minutos), así que un timeout corto provoca falsos positivos y uno largo, esperas largas. Peor aún, un nodo **puede pausarse** (un GC "stop-the-world", una VM suspendida, un SIGSTOP, un page fault) durante segundos sin que su programa lo note: el resto del mundo puede declararlo muerto, y al despertar sigue actuando como líder o lock-holder con datos ya obsoletos. Por eso el reloj de pared no es fiable y se usan relojes monotónicos, leases y tokens de fencing. Exigir que el software funcione asumiendo estas tres cosas es lo que espera una entrevista senior de sistemas distribuidos.
+**El matiz del Diseño de Aplicaciones mediante el uso Intensivo de Datos (Designing Data-Intensive Applications o DDIA):** más allá de las 8 falacias, la mayoría de los fallos distribuidos se reduce a **tres fuentes recurrentes de problemas**: (1) **red no fiable**, (2) **relojes no fiables** y (3) **pausas de proceso**. Si no recibes respuesta de un nodo, es **imposible distinguir** si se perdió la petición, si el nodo cayó o si se perdió la respuesta; la red y los timeouts tienen _retrasos no acotados_ (un paquete puede tardar minutos), así que un timeout corto provoca falsos positivos y uno largo, esperas largas. Peor aún, un nodo **puede pausarse** (un GC "stop-the-world", una VM suspendida, un SIGSTOP, un page fault) durante segundos sin que su programa lo note: el resto del mundo puede declararlo muerto, y al despertar sigue actuando como líder o lock-holder con datos ya obsoletos. Por eso el reloj de pared no es fiable y se usan relojes monotónicos, concesiones (leases) y tokens de delimitación (fencing tokens). Exigir que el software funcione asumiendo estas tres cosas es lo que espera una entrevista senior de sistemas distribuidos.
 
 > _Fuente: DDIA, Cap. 9, §§ "Unreliable Networks", "Unreliable Clocks / Process Pauses", "Distributed Locks and Leases"._
 

@@ -27,7 +27,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 | 05 | [Bases de datos distribuidas](05-Bases-de-datos-distribuidas.md) | DynamoDB, patrones NoSQL, particionamiento, GSI/LSI |
 | 06 | [Infraestructura como Código](06-Infraestructura-como-Codigo.md) (+ [Apéndice A](06-Infraestructura-como-Codigo-Apendice-A.md)) | Terraform, CloudFormation |
 | 07 | [Observabilidad](07-Observabilidad.md) (+ [Apéndice A](07-Observabilidad-Apendice-A.md)) | OpenTelemetry, Prometheus, Distributed Tracing, RUM, alerting SRE |
-| 08 | Seguridad | OAuth2, JWT, OpenID Connect, IAM, mejores prácticas |
+| 08 | [Seguridad](08-Seguridad.md) (+ [Apéndice A](08-Seguridad-Apendice-A.md)) | OAuth 2.1, JWT, OpenID Connect, IAM, mejores prácticas |
 | 09 | Diseño de APIs | REST, GraphQL, Webhooks, versionado, idempotencia |
 | 10 | Escalabilidad y Resiliencia | Caching, Sharding, Replication, Circuit Breaker, Backpressure |
 | 11 | Patrones de Diseño | GoF y patrones de arquitectura empresarial |
