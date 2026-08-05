@@ -30,7 +30,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 | 08 | [Seguridad](08-Seguridad.md) (+ [Apéndice A](08-Seguridad-Apendice-A.md)) | OAuth 2.1, JWT, OpenID Connect, IAM, mejores prácticas |
 | 09 | [Diseño de APIs](09-Diseño-de-APIs.md) (+ [Apéndice A](09-Diseño-de-APIs-Apendice-A.md)) | REST, GraphQL, gRPC, Webhooks, versionado, idempotencia |
 | 10 | [Escalabilidad y Resiliencia](10-Escalabilidad-y-Resiliencia.md) (+ [Apéndice A](10-Escalabilidad-y-Resiliencia-Apendice-A.md)) | Caching, Sharding, Replication, Circuit Breaker, Backpressure |
-| 11 | Patrones de Diseño | GoF y patrones de arquitectura empresarial |
+| 11 | [Patrones de Diseño](11-Patrones-de-Diseño.md) (+ [Apéndice A](11-Patrones-de-Diseño-Apendice-A.md)) | GoF, patrones de arquitectura, estilos |
 | 12 | CI/CD moderno | GitHub Actions, estrategias de despliegue |
 | 13 | AI-Assisted Development | Copilot, Claude Code, Cursor, agentes |
 | 14 | System Design Interview | Framework de entrevistas de diseño a nivel Senior |
