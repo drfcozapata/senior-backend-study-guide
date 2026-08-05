@@ -33,7 +33,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 | 11 | [Patrones de Diseño](11-Patrones-de-Diseño.md) (+ [Apéndice A](11-Patrones-de-Diseño-Apendice-A.md)) | GoF, patrones de arquitectura, estilos |
 | 12 | [CI/CD moderno](12-CI-CD-Moderno.md) (+ [Apéndice A](12-CI-CD-Moderno-Apendice-A.md)) | GitHub Actions, estrategias de despliegue |
 | 13 | [AI-Assisted Development](13-AI-Assisted-Development.md) (+ [Apéndice A](13-AI-Assisted-Development-Apendice-A.md)) | Copilot, Claude Code, Cursor, Codex, OpenCode, agentes, MCP, context engineering |
-| 14 | System Design Interview | Framework de entrevistas de diseño a nivel Senior |
+| 14 | [System Design Interview](14-System-Design-Interview.md) (+ [Apéndice A](14-System-Design-Interview-Apendice-A.md)) | Pensar como arquitecto, framework de entrevista, estimaciones, casos: Twitter/X, Netflix, Uber, WhatsApp, pagos, notificaciones |
 | 15 | Preguntas y ejercicios | Banco de preguntas técnicas y ejercicios prácticos |
 | 16 | Roadmap y Proyecto Final | Plan de estudio, laboratorios integradores, proyecto capstone |
 

@@ -41,6 +41,13 @@ Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID c
 
 **Contraste con:** [BASE](#base) · **Profundizado en:** Módulo 05 (Bases de datos distribuidas)
 
+### Adaptive Bitrate Streaming (ABR)
+**Definición corta:** Técnica de streaming que trocea el video en **chunks de ~2 segundos** codificados a **múltiples bitrates** (ladder: 240p–4K); el cliente elige en cada momento el bitrate que su red y buffer soportan (HLS/DASH).
+
+**En la práctica:** un título se codifica en 5-15 bitrates × codecs → decenas de variantes; el cliente pide primero un **manifest** (lista de chunks por calidad) y luego los chunks uno a uno. Es lo que permite ver 4K en fibra y SD en 3G con la misma infraestructura. Consecuencia para diseño: cada stream genera **miles de objetos cacheados** (un 4K ≈ 15-20 GB, 50+ encodings) y los picos de premieres crean **cache miss storms** en el CDN. Ver [CDN](#cdn-content-delivery-network).
+
+**Relacionado con:** [CDN](#cdn-content-delivery-network) · **Profundizado en:** Módulo 14
+
 ### At-least-once (semántica de entrega)
 **Definición corta:** Garantía de que cada mensaje se entrega **una o más veces**; nunca se pierde, pero puede duplicarse.
 
@@ -58,6 +65,13 @@ Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID c
 ---
 
 ## B
+
+### Back-of-the-envelope estimation
+**Definición corta:** Estimación aproximada de escala hecha "en el reverso de un sobre": QPS, almacenamiento, ancho de banda y cache, con potencias de diez y supuestos declarados.
+
+**En la práctica:** es el paso que separa a un candidato senior en entrevistas de diseño. Anclajes que debes memorizar: **~10⁵ segundos por día** (86.400), por lo que *X requests/día ≈ X/10⁵ por segundo*; **factor de pico 2-10×** sobre el promedio; y referencias (500M posts/día en X, 100.000M msg/día en WhatsApp, ~1.25M GPS updates/s en Uber, ~20M streams pico en Netflix). Regla: un orden de magnitud de error es aceptable; lo evaluado es el **razonamiento cuantitativo**, no la cifra exacta. Nunca omitas declarar los supuestos ("asumo 1 KB por post, ratio read:write 100:1").
+
+**Profundizado en:** Módulo 14
 
 ### Blue-Green (estrategia de despliegue)
 **Definición corta:** Dos entornos de producción idénticos (blue y green); solo uno recibe tráfico en cada momento. El release es cambiar el router/load balancer hacia el otro entorno.
@@ -123,6 +137,13 @@ El teorema se malinterpreta a menudo: **C y A solo entran en conflicto durante u
 
 **Relacionado con:** [PACELC](#pacelc) · [BASE](#base) · [Consistencia eventual](#consistencia-eventual) · **Profundizado en:** Módulos 01, 05 y 10
 
+### CDN (Content Delivery Network)
+**Definición corta:** Red distribuida de servidores edge que cachea contenido (estáticos, media, video) cerca del usuario para reducir latencia y carga del origen.
+
+**En la práctica:** el usuario recibe los bytes desde un edge a <10 ms; solo los **cache misses** y el long-tail llegan al origen (en Netflix, ~95-98% del tráfico lo sirve su CDN propia, Open Connect, instalada *dentro de los ISPs*). Decisiones senior: distribución de popularidad **Zipf** (pocos títulos concentran la demanda → dimensiona los tiers), **pre-warming** predictivo para estrenos, retry con backoff+jitter contra la **cache miss storm** (thundering herd de millones de peticiones al origen), y la **elección de no construir tu propio CDN** salvo que el costo por byte lo justifique (Netflix sí, una tienda no).
+
+**Relacionado con:** [Adaptive Bitrate Streaming (ABR)](#adaptive-bitrate-streaming-abr) · **Profundizado en:** Módulo 14
+
 ### Circuit Breaker
 **Definición corta:** Patrón que envuelve llamadas a un servicio externo: si los fallos superan un umbral, el circuito "se abre" y las llamadas fallan inmediatamente sin intentar la conexión.
 
@@ -168,6 +189,13 @@ El teorema se malinterpreta a menudo: **C y A solo entran en conflicto durante u
 **En la práctica:** distinguen equipos elite/high/medium/low. Despliegues frecuentes y baratos, lead time corto, baja tasa de fallos y recuperación rápida correlacionan con mayor rendimiento organizacional. Las métricas tienen **trade-offs**: desplegar más frecuente con gates mal puestos sube el Change Failure Rate; bajar MTTR a costa de sacrificar la causa raíz es deuda a futuro.
 
 **Relacionado con:** [CI / Continuous Delivery / Continuous Deployment](#ci--continuous-delivery--continuous-deployment) · **Profundizado en:** Módulo 12
+
+### Double-entry ledger (contabilidad de partida doble)
+**Definición corta:** Registro financiero **append-only e inmutable** donde cada transacción escribe **dos asientos que suman cero** (un débito y un crédito); los balances se derivan sumando asientos, nunca se almacenan como campo mutable.
+
+**En la práctica:** es el patrón de correctitud de todo sistema de pagos serio (Stripe, bancos). Un cargo de $100 crea débito `customer_receivable +100` y crédito `revenue +100`; un refund crea los asientos inversos. Implicaciones de diseño: si débitos ≠ créditos, algo está mal — y lo sabes al instante; las correcciones se hacen con **asientos de reversión**, nunca editando (audit trail completo); el ledger **casi no se particiona** — aceptas un solo Postgres con `SERIALIZABLE` como bottleneck porque la correctitud pesa más que la escala. La conciliación diaria contra el *settlement file* del procesador prueba que tu vista de la realidad coincide con la del banco.
+
+**Relacionado con:** [Idempotencia](#idempotencia) · [Outbox](#outbox-patrón--transactional-outbox) · **Profundizado en:** Módulo 14
 
 ### Deployment vs. Release
 **Definición corta:** **Deployment**: instalar una versión de software en un entorno. **Release**: hacer que una funcionalidad sea visible/usada por los usuarios.
@@ -227,6 +255,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 **Profundizado en:** Módulo 01
 
+### Fan-out
+**Definición corta:** Factor por el cual una operación inicial se multiplica en varias operaciones aguas abajo (1 post → N timelines, 1 evento → N notificaciones). Es la decisión central de los sistemas de feed.
+
+**En la práctica:** dos estrategias. **Pull:** el reader consulta al leer (simple, pero inviable con ratio read:write alto — en X sería 400M lookups/s). **Push:** al escribir, se entrega a todos los interesados (writes caros: 5.800 posts/s × 200 followers ≈ 1M writes/s, pero reads triviales). Con ratio 100:1 pagas en el write. La variante **híbrida** resuelve el hot key: las cuentas con millones de followers no se fanoutean, se almacenan aparte y se **mergean en lectura**. El [Two-stage fanout](#two-stage-fanout) extiende el patrón a campañas masivas.
+
+**Relacionado con:** [Materialized view](#materialized-view) · [Two-stage fanout](#two-stage-fanout) · **Profundizado en:** Módulo 14
+
 ### Feature Flag (toggle)
 **Definición corta:** Mecanismo que enciende/apaga una funcionalidad en tiempo de ejecución (configuración, no deploy), sin desplegar código nuevo.
 
@@ -237,6 +272,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 ---
 
 ## G
+
+### Geospatial indexing (S2 / Geohash / H3)
+**Definición corta:** Técnica de indexación geoespacial que divide el mapa en **celdas** con un ID único; la celda es a la vez la clave de shard y el índice para consultas de proximidad (k-nearest-neighbors).
+
+**En la práctica:** responde "¿qué drivers están cerca?" a millones de actualizaciones de GPS por segundo, algo que una base de datos relacional no hace. La celda del rider + las vecinas dan los candidatos en O(1) por partición. Diferencias: **Geohash** (simple, celdas de forma irregular), **Google S2** (curvas de Hilbert, cobertura uniforme), **Uber H3** (hexágonos de vecindad uniforme). Decisiones senior: el estado actual (última ubicación) vive en un **índice in-memory** (overwrite, el dato viejo no importa) mientras el histórico va al camino frío; y el **hot cell** (Times Square) se mitiga con replicación/sub-sharding de la celda caliente.
+
+**Relacionado con:** [Fan-out](#fan-out) · **Profundizado en:** Módulo 14
 
 ### GitOps
 **Definición corta:** Patrón donde Git es la **única fuente de verdad** del estado deseado de la infraestructura y las aplicaciones; un operador en el cluster reconcilia continuamente el estado real con el declarado en el repo.
@@ -255,6 +297,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 **En la práctica:** el dominio define puertos de entrada (driving: lo que la app ofrece, ej: `OrderService`) y de salida (driven: lo que la app necesita, ej: `OrderRepository`, `PaymentGateway`). Los adaptadores implementan los puertos para tecnologías concretas: REST controller, PostgreSQL, Stripe, SQS. Puedes intercambiar adaptadores (y probar el dominio con adaptadores de test) sin tocar el núcleo. Conceptualmente equivalente a [Clean Architecture](#clean-architecture) y [Onion Architecture](#onion-architecture): las tres son "arquitecturas centradas en el dominio".
 
 **Profundizado en:** Módulo 01
+
+### Hot key / hot partition / hot cell
+**Definición corta:** Una clave (o shard, o celda geográfica) que concentra una fracción desproporcionada del tráfico, sobrecargando el nodo que la sirve.
+
+**En la práctica:** es el modo de fallo de escala más común y el que un senior debe anticipar. Ejemplos: una celebridad con 100M de followers (fan-out), una celda de Uber en Times Square, una partición de base de datos con el producto estrella. Mitigaciones: **sub-sharding** o replicación extra de la clave caliente, **merge en lectura** en lugar de fan-out para celebridades, distribuir el hashing de esa clave, y cachear agresivamente el dato caliente. En una entrevista de diseño, *nombrar el hot key y su mitigación sin que te lo pregunten* es señal de senior.
+
+**Relacionado con:** [Fan-out](#fan-out) · [Sharding](#sharding) · **Profundizado en:** Módulo 14
 
 ---
 
@@ -303,6 +352,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 ---
 
 ## M
+
+### Materialized view
+**Definición corta:** Resultado de una consulta **precomputado y almacenado** como dato derivado (feed, timeline cache, balances agregados), en lugar de calcularse en cada lectura.
+
+**En la práctica:** el ejemplo canónico es el home timeline de X: en vez de consultar los posts de 200 follows en cada lectura (inviable), el post se inserta en el timeline materializado (mailbox) de cada follower al publicarse, y el feed se sirve desde cache. **Trade-off fundamental:** velociza los reads a cambio de más trabajo en los writes (write-amplification). Se elige cuando el cálculo es caro y el ratio read/write es alto. El patrón [Fan-out](#fan-out) es la mecánica de actualización de la vista materializada. Los balances financieros son el caso "derivado" equivalente (ver [Double-entry ledger](#double-entry-ledger-contabilidad-de-partida-doble)).
+
+**Relacionado con:** [Fan-out](#fan-out) · [CQRS](#cqrs-command-query-responsibility-segregation) · [Double-entry ledger](#double-entry-ledger-contabilidad-de-partida-doble) · **Profundizado en:** Módulo 14
 
 ### MCP (Model Context Protocol)
 **Definición corta:** Estándar abierto (Anthropic, 2024; JSON-RPC 2.0) que estandariza cómo los LLM descubren e invocan herramientas externas. Resuelve el problema *N×M* de integraciones convirtiéndolo en *N+M*.
@@ -408,6 +464,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 **Profundizado en:** Módulos 09 y 10
 
+### Reconciliation (conciliación)
+**Definición corta:** Proceso que compara dos fuentes de verdad (el ledger interno y el *settlement file* del procesador/banca) y detecta discrepancias, que saltan a revisión manual.
+
+**En la práctica:** es la tercera garantía no negociable de un sistema de pagos (tras [idempotencia](#idempotencia) y [double-entry ledger](#double-entry-ledger-contabilidad-de-partida-doble)): el sistema puede ser correcto por diseño, pero solo la conciliación **prueba** que tu vista de la realidad coincide con la del banco cada día (batch T+1 a T+3). Señal senior: si un diseño financiero no menciona reconciliación, no está completo. También se aplica como patrón general: comparar estados derivados contra su origen (ej: inventario real vs contado) para detectar drift.
+
+**Relacionado con:** [Double-entry ledger](#double-entry-ledger-contabilidad-de-partida-doble) · [Idempotencia](#idempotencia) · **Profundizado en:** Módulo 14
+
 ### Replication
 **Definición corta:** Mantener copias del mismo dato en múltiples nodos para mejorar disponibilidad, durabilidad y rendimiento de lectura.
 
@@ -498,12 +561,26 @@ No hay rollback real (los datos ya fueron commit): la compensación es una opera
 
 ## T
 
+### Thundering herd (estampida)
+**Definición corta:** Cuando una gran cantidad de clientes reintenta o pide simultáneamente el mismo recurso tras un fallo, provocando una avalancha que tumba el sistema (origen, base de datos o cache).
+
+**En la práctica:** dos variantes clásicas. **Retry storm:** millones de clientes con timeout reintentan a la vez → se usa **backoff exponencial + jitter** para descorrelacionar. **Cache stampede:** un cache miss masivo (cold start, eviction, estreno) dispara millones de recalculos del mismo dato hacia el origen → mitigaciones: *single flight* (una sola petición recalcula, el resto espera), pre-warming predictivo (empujar contenido antes del pico), y canary para validar hit ratio. Es un **efecto de segundo orden** que un senior debe nombrar en el deep dive de cualquier diseño con picos predecibles (premieres, Black Friday, elecciones).
+
+**Relacionado con:** [Retry](#retry) · [CDN](#cdn-content-delivery-network) · [Hot key](#hot-key--hot-partition--hot-cell) · **Profundizado en:** Módulos 10 y 14
+
 ### Twelve-Factor App
 **Definición corta:** Metodología de Heroku con 12 prácticas para construir aplicaciones cloud/SaaS portables y escalables.
 
 **Las 12 (resumen senior):** codebase única en control de versiones; dependencias explícitas; **configuración en variables de entorno** (nunca en el código); backing services como recursos adjuntos; build/release/run separados estrictamente; procesos **stateless** (el estado vive en backing services); port binding (la app se autoexpone); concurrencia por escalado de procesos; **disposability** (arranque rápido, shutdown limpio); paridad dev/staging/prod; logs como flujos de eventos a stdout; procesos admin como one-off. Es la base filosófica de containers, serverless y Kubernetes.
 
 **Profundizado en:** Módulo 01
+
+### Two-stage fanout
+**Definición corta:** Patrón para entregar un evento a **decenas de millones** de destinatarios sin bloquear el hot path: primero se encola un job por segmento; unos workers **expanden** cada segmento en mensajes por-usuario en batches.
+
+**En la práctica:** una campaña de 100M de notificaciones no se hace con un loop síncrono ni con 100M mensajes a la vez. El Campaign Service publica **un job por segmento**; el Fanout Service pagina los usuarios de 1.000 en 1.000 y publica por-usuario en la cola del canal, con prioridad para los activos (últimas 24h). El hot path (una notificación transaccional) **nunca** pasa por aquí. Es la extensión de [Fan-out](#fan-out) para el caso de broadcast masivo y el patrón que distingue un diseño de notificaciones mid de uno senior.
+
+**Relacionado con:** [Fan-out](#fan-out) · [Rate Limiting](#rate-limiting) · **Profundizado en:** Módulo 14
 
 ---
 
@@ -525,6 +602,13 @@ No hay rollback real (los datos ya fueron commit): la compensación es una opera
 ---
 
 ## W
+
+### WebSocket
+**Definición corta:** Protocolo que mantiene una **conexión TCP bidireccional y persistente** entre cliente y servidor, permitiendo al servidor *empujar* datos sin polling (RFC 6455).
+
+**En la práctica:** la base del real-time: chat (WhatsApp), presencia, tracking en vivo (Uber), dashboards, juegos. Consecuencias de diseño: las conexiones son **estado** (sticky LB o routing por hash para reencaminar), consumen memoria/CPU por conexión (un thread por conexión no escala — WhatsApp usa procesos livianos de Erlang/BEAM, ~2M conexiones por servidor), y el servidor debe manejar reconnect + reenvíos (dedup por id de mensaje). Alternativa para **unidireccional** server→client: **SSE** (Server-Sent Events, más simple, sin soporte bidireccional). Elección senior: WebSocket cuando hay ida y vuelta; SSE cuando el cliente solo escucha.
+
+**Relacionado con:** [Hot key](#hot-key--hot-partition--hot-cell) · **Profundizado en:** Módulo 14
 
 ### Write-Behind / Write-Back (patrón de caché)
 **Definición corta:** La aplicación escribe solo en la caché; la persistencia en la base de datos se hace de forma asíncrona después.
