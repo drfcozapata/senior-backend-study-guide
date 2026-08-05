@@ -14,6 +14,20 @@ Glosario vivo de la guía. Crece con cada módulo: cada vez que aparezca un conc
 
 ## A
 
+### AGENTS.md
+**Definición corta:** Archivo de instrucciones persistentes en la raíz del repo que todo agente de IA lee al iniciar: estructura, convenciones, comandos, restricciones.
+
+**En la práctica:** es el *system prompt* por repositorio. El estándar AGENTS.md (OpenAI, ago. 2025; adoptado por Codex, Cursor, Copilot, Gemini CLI, OpenCode…) y CLAUDE.md (Anthropic) cumplen el mismo papel. Bien escrito reduce errores del agente (que no conoce las convenciones), mal escrito o ausente provoca código que no respeta la arquitectura del repo. Se actualiza en el PR que cambia las convenciones (documentación viva).
+
+**Relacionado con:** [Context Engineering](#context-engineering) · **Profundizado en:** Módulo 13
+
+### Agent loop
+**Definición corta:** Ciclo *plan → act → observe* que ejecuta un agente de IA hasta completar la tarea: decide una acción (leer archivo, correr comando), la ejecuta, observa el resultado y decide la siguiente.
+
+**En la práctica:** es la unidad arquitectónica de todos los agentes de código (Claude Code, Codex, OpenCode). Dos implicaciones: el **contexto** es el input dominante (solo sabe lo que le pones), y el **compound mistakes** degrada la fiabilidad con cada paso (95% por paso → 60% en 10 pasos). Por eso: specs claras, descomposición y validar el plan antes de ejecutar.
+
+**Relacionado con:** [MCP (Model Context Protocol)](#mcp-model-context-protocol) · [Subagente](#subagente) · **Profundizado en:** Módulo 13
+
 ### ACID
 **Definición corta:** Conjunto de propiedades (Atomicidad, Consistencia, Aislamiento, Durabilidad) que garantiza que las transacciones de una base de datos se procesen de forma fiable.
 
@@ -69,6 +83,13 @@ Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID c
 ---
 
 ## C
+
+### Context Engineering
+**Definición corta:** Disciplina de gestionar *todo lo que el agente de IA ve* (instrucciones persistentes, estructura del repo, archivos leídos, resultados de ejecución) como el input dominante de la calidad del output.
+
+**En la práctica:** el prompt es una instrucción; el contexto es lo que el agente percibe. Tres patrones: **AGENTS.md/CLAUDE.md** en la raíz (system prompt por repo), **specs en archivos > conversaciones largas** (las sesiones largas degradan: el agente "olvida" el principio), y **contexto justo y a demanda** (repo map + lectura selectiva + subagentes que aíslan contextos). Aunque la ventana llegue a 1M tokens, más contexto no es gratis: costo, latencia y peor retención del "middle of context".
+
+**Relacionado con:** [AGENTS.md](#agentsmd) · [Prompt engineering](#prompt-engineering) · **Profundizado en:** Módulo 13
 
 ### Canary (estrategia de despliegue)
 **Definición corta:** Promover una release por entornos cada vez más grandes a medida que se confirma que funciona (empleados → pequeño % de clientes → todos), deteniéndose si falla.
@@ -283,6 +304,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 ## M
 
+### MCP (Model Context Protocol)
+**Definición corta:** Estándar abierto (Anthropic, 2024; JSON-RPC 2.0) que estandariza cómo los LLM descubren e invocan herramientas externas. Resuelve el problema *N×M* de integraciones convirtiéndolo en *N+M*.
+
+**En la práctica:** arquitectura **host/client/server** (el host es la app con el LLM — Claude Code, Cursor, OpenCode, VS Code; el server expone capacidades). Primitivas: **tools** (acciones ejecutables), **resources** (datos de solo lectura), **prompts** (plantillas). Transports: `stdio` (local) y `HTTP/SSE` (remoto). El matiz senior: MCP le da a los agentes *write actions* (pueden ejecutar código), y la especificación advierte que las herramientas son "arbitrary code execution" y sus descripciones se tratan como **no confiables** — es el vector del **agentjacking** (instrucciones inyectadas en datos que el agente ejecuta con los privilegios del usuario).
+
+**Relacionado con:** [Agent loop](#agent-loop) · [Prompt injection](#prompt-injection) · **Profundizado en:** Módulo 13
+
 ### (Microservicios)
 **Definición corta:** Estilo arquitectónico donde la aplicación se estructura como servicios pequeños, autónomos, desplegables independientemente, modelados alrededor de dominios de negocio.
 
@@ -336,6 +364,20 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 ---
 
 ## P
+
+### Prompt engineering
+**Definición corta:** Diseño de las instrucciones que se dan a un modelo de lenguaje (qué hacer, con qué ejemplos y qué formato de salida) para obtener el comportamiento deseado.
+
+**En la práctica:** las técnicas que sobreviven a los modelos: instrucciones claras y sin ambigüedad, ejemplos (*few-shot*), formato de salida explícito, descomponer tareas complejas, y dar tiempo al modelo a "pensar" (chain-of-thought). En código: el prompt define *el cambio*, no solo la tarea ("refactoriza a patrón Strategy; mantén la API; no cambies comportamiento"). Los prompts se versionan y se separan del código (reutilizables, testeables). Diferencia clave: el **prompt** es la instrucción; el **contexto** (ver [Context Engineering](#context-engineering)) es todo lo que el agente percibe.
+
+**Relacionado con:** [Context Engineering](#context-engineering) · [Prompt injection](#prompt-injection) · **Profundizado en:** Módulo 13
+
+### Prompt injection
+**Definición corta:** Ataque que inyecta instrucciones maliciosas en los datos que un modelo/agente procesa, para que ejecute acciones no autorizadas (jailbreaking aplicado a entradas indirectas).
+
+**En la práctica:** el modelo no distingue fiablemente entre instrucciones legítimas (system prompt) e instrucciones que vienen de *datos* (web, logs, archivos). En agentes de código el riesgo se amplifica: el **agentjacking** (CSA/Tenet, 2026) inyectó instrucciones en eventos de error de Sentry que el agente leía vía MCP, y el agente **ejecutó comandos del atacante con los privilegios del desarrollador** (85% de éxito en Claude Code/Cursor/Codex CLI), exfiltrando credenciales. Defensas: tratar datos como no autoritativos, MCP servers verificados, permisos mínimos, aprobación humana para *write actions*, sandbox, y no exponer secretos innecesarios.
+
+**Relacionado con:** [MCP (Model Context Protocol)](#mcp-model-context-protocol) · **Profundizado en:** Módulo 13
 
 ### PACELC
 **Definición corta:** Extensión del teorema CAP: **si hay Partición**, eliges entre Disponibilidad (A) y Consistencia (C); **en caso contrario (Else)**, eliges entre Latencia (L) y Consistencia (C).
@@ -406,6 +448,20 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 ## S
 
+### Subagente
+**Definición corta:** Agente hijo con su propia ventana de contexto y tarea, orquestado por el agente principal de un sistema multi-agente.
+
+**En la práctica:** permite **paralelismo** (varios subagentes trabajan a la vez) y **aislamiento de contexto** (el subagente de tests no llena la ventana del de arquitectura). Patrones: separación *plan/act* (un agente planifica, otro ejecuta — el patrón Architect/Editor), y especialización (tests, migraciones, frontend). Advertencias: los sistemas multi-agente son **más difíciles de depurar** (menos visibilidad), y la orquestación debe validar el plan antes de ejecutar (Huyen: *"planning should be decoupled from execution"*). Úsalo con criterio, no como religión.
+
+**Relacionado con:** [Agent loop](#agent-loop) · **Profundizado en:** Módulo 13
+
+### SWE-bench / Terminal-Bench
+**Definición corta:** Benchmarks de agentes de código: SWE-bench mide la resolución de issues reales de GitHub (patch correcto contra la test suite del repo); Terminal-Bench mide tareas reales de terminal en un sandbox.
+
+**En la práctica:** SWE-bench Verified pasó de ~13% (2024) a ~78–80% (2026); Terminal-Bench ~52–58%. Pero la **tasa de PRs aceptados en producción real se estima en 35–50%** — el benchmark no captura convenciones ni expectativas de tu repo. Lectura senior: úsalos para *calibrar expectativas*, nunca como promesa; evalúa tu caso con *evals sobre tu propio código* y métricas de flujo (lead time, change failure rate, costo total de tokens + revisión).
+
+**Relacionado con:** [Context Engineering](#context-engineering) · **Profundizado en:** Módulo 13
+
 ### Saga
 **Definición corta:** Patrón para mantener consistencia en transacciones que cruzan varios servicios: una secuencia de transacciones locales donde cada paso tiene una **transacción de compensación** que deshace su efecto si falla un paso posterior.
 
@@ -453,8 +509,14 @@ No hay rollback real (los datos ya fueron commit): la compensación es una opera
 
 ## V
 
-### Vertical Slice Architecture
-**Definición corta:** Organización del código por **features** (cada slice contiene todo lo necesario para una funcionalidad: endpoint, lógica, acceso a datos) en lugar de por capas técnicas.
+### Vibe coding
+**Definición corta:** (Coloquial) "Codear a vibra": aceptar el output de una IA sin entenderlo, revisarlo ni testearlo, confiando en que "funciona".
+
+**En la práctica:** produce **deuda técnica invisible** (código que nadie puede mantener porque nadie lo entiende), bugs no detectados que pasan a producción y dependencias sin revisar. Es el antónimo del trabajo senior. Lo que lo reemplaza es el *agentic engineering*: dirigir agentes con especificación clara, contexto persistente (AGENTS.md, specs), descomposición y **verificación continua** (tests, CI, review humano del diff). La IA es una herramienta de alta productividad *con* proceso de calidad fuerte; una máquina de deuda sin él.
+
+**Relacionado con:** [Context Engineering](#context-engineering) · **Profundizado en:** Módulo 13
+
+### Vertical Slice Architecture**Definición corta:** Organización del código por **features** (cada slice contiene todo lo necesario para una funcionalidad: endpoint, lógica, acceso a datos) en lugar de por capas técnicas.
 
 **En la práctica:** contraste con capas horizontales (`Controllers/`, `Services/`, `Repositories/`). Cada feature es un módulo autocontenido que acopla mínimamente con otros; añadir una feature = añadir una carpeta, sin tocar código existente. Combina bien con el patrón Mediator (MediatR) y con microservicios, donde cada servicio ya es un slice del negocio. Regla práctica: usa organización por capas dentro de cada slice si la feature es compleja; no fuerces capas globales.
 
