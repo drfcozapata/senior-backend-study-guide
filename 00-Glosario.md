@@ -8,7 +8,7 @@ Glosario vivo de la guía. Crece con cada módulo: cada vez que aparezca un conc
 
 ## Índice alfabético
 
-[A](#a) · [B](#b) · [C](#c) · [D](#d) · [E](#e) · [F](#f) · [G](#g) · [H](#h) · [I](#i) · [J](#j) · [L](#l) · [M](#m) · [N](#n) · [O](#o) · [P](#p) · [R](#r) · [S](#s) · [T](#t) · [V](#v) · [W](#w)
+[A](#a) · [B](#b) · [C](#c) · [D](#d) · [E](#e) · [F](#f) · [G](#g) · [H](#h) · [I](#i) · [J](#j) · [L](#l) · [M](#m) · [N](#n) · [O](#o) · [P](#p) · [Q](#q) · [R](#r) · [S](#s) · [T](#t) · [V](#v) · [W](#w)
 
 ---
 
@@ -45,6 +45,13 @@ Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID c
 
 ## B
 
+### Blue-Green (estrategia de despliegue)
+**Definición corta:** Dos entornos de producción idénticos (blue y green); solo uno recibe tráfico en cada momento. El release es cambiar el router/load balancer hacia el otro entorno.
+
+**En la práctica:** despliegas la versión nueva en el entorno inactivo, la pruebas sin interrumpir el tráfico, y luego rediriges el tráfico. **Rollback = volver a dirigir el tráfico al anterior** (instantáneo, sin redeploy). Costo: el doble de infraestructura. Dificultad: la base de datos compartida — se resuelve con cambios de esquema aditivos (la app no asume versión de BD) o dos BDs (con riesgo de perder transacciones al rollback).
+
+**Relacionado con:** [Canary](#canary-estrategia-de-despliegue) · [Feature Flag](#feature-flag-toggle) · **Profundizado en:** Módulo 12
+
 ### Backpressure
 **Definición corta:** Mecanismo por el cual un sistema señala a sus productores que reduzcan el ritmo cuando no puede procesar la carga entrante.
 
@@ -62,6 +69,20 @@ Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID c
 ---
 
 ## C
+
+### Canary (estrategia de despliegue)
+**Definición corta:** Promover una release por entornos cada vez más grandes a medida que se confirma que funciona (empleados → pequeño % de clientes → todos), deteniéndose si falla.
+
+**En la práctica:** el nombre viene de los canarios de los mineros: detectan el gas antes que los mineros. Variante avanzada: **cluster immune system**, que conecta el monitoreo de producción con el proceso de release y **automatiza el rollback** si las métricas de usuario se desvían (latencia, error rate, conversión).
+
+**Relacionado con:** [Blue-Green](#blue-green-estrategia-de-despliegue) · **Profundizado en:** Módulo 12
+
+### CI / Continuous Delivery / Continuous Deployment
+**Definición corta:** CI integra el código de todos en trunk diariamente con tests automatizados; Continuous Delivery mantiene trunk desplegable y permite liberar a demanda; Continuous Deployment despliega automáticamente cada build bueno.
+
+**En la práctica:** CI es el prerrequisito de CD, y CD lo es de CDel. El matiz clave: **deployment ≠ release** — desplegar es instalar una versión; liberar es hacer una feature visible a usuarios o segmentos. Desacoplarlos permite desplegar frecuente y de bajo riesgo mientras el negocio decide cuándo liberar. CDel aplica sobre todo a servicios web; CD es el estándar en casi todo (mobile, COTS, embedded).
+
+**Profundizado en:** Módulo 12
 
 ### Cache-Aside (patrón de caché)
 **Definición corta:** Patrón donde la aplicación consulta primero la caché; en caso de miss, lee de la base de datos, guarda en caché y devuelve el dato.
@@ -120,6 +141,20 @@ El teorema se malinterpreta a menudo: **C y A solo entran en conflicto durante u
 
 ## D
 
+### DORA Metrics
+**Definición corta:** Las cuatro métricas clave del informe State of DevOps (DORA/Google Cloud): **Deployment Frequency**, **Lead Time for Changes**, **Change Failure Rate**, **MTTR** (tiempo para restaurar el servicio).
+
+**En la práctica:** distinguen equipos elite/high/medium/low. Despliegues frecuentes y baratos, lead time corto, baja tasa de fallos y recuperación rápida correlacionan con mayor rendimiento organizacional. Las métricas tienen **trade-offs**: desplegar más frecuente con gates mal puestos sube el Change Failure Rate; bajar MTTR a costa de sacrificar la causa raíz es deuda a futuro.
+
+**Relacionado con:** [CI / Continuous Delivery / Continuous Deployment](#ci--continuous-delivery--continuous-deployment) · **Profundizado en:** Módulo 12
+
+### Deployment vs. Release
+**Definición corta:** **Deployment**: instalar una versión de software en un entorno. **Release**: hacer que una funcionalidad sea visible/usada por los usuarios.
+
+**En la práctica:** desacoplar ambos es la clave del despliegue de bajo riesgo: puedes desplegar diario (cambios pequeños, reversibles) y liberar features cuando el negocio quiera, activando un [Feature Flag](#feature-flag-toggle) o una variable de configuración. Con despliegue y release acoplados, cada release es un evento de alto riesgo que necesita ventana de mantenimiento y personal de guardia.
+
+**Relacionado con:** [CI / Continuous Delivery / Continuous Deployment](#ci--continuous-delivery--continuous-deployment) · **Profundizado en:** Módulo 12
+
 ### DDD (Domain-Driven Design)
 **Definición corta:** Enfoque de diseño de software (Eric Evans) que pone el dominio del negocio en el centro, modelándolo con un lenguaje ubicuo compartido entre técnicos y expertos del negocio.
 
@@ -171,11 +206,23 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 **Profundizado en:** Módulo 01
 
+### Feature Flag (toggle)
+**Definición corta:** Mecanismo que enciende/apaga una funcionalidad en tiempo de ejecución (configuración, no deploy), sin desplegar código nuevo.
+
+**En la práctica:** desacopla **deployment de release** (ver [Deployment vs. Release](#deployment-vs-release)): despliegas el código con la feature apagada y la activas cuando quieras, por usuario, porcentaje o segmento. Permite release progresivo, canary de negocio, kill switch instantáneo y rollback sin redeploy. Requisitos: **features muertas se eliminan** (deuda técnica), flags de corta vida para releases y de larga vida para operaciones, y gestionarlas bien (LaunchDarkly, o en casa con configuración + feature flag service) para no convertir la app en un árbol de ifs.
+
+**Relacionado con:** [Canary](#canary-estrategia-de-despliegue) · [Deployment vs. Release](#deployment-vs-release) · **Profundizado en:** Módulo 12
+
 ---
 
 ## G
 
-*(Se irá poblando con los módulos: GSI, GraphQL, GitOps…)*
+### GitOps
+**Definición corta:** Patrón donde Git es la **única fuente de verdad** del estado deseado de la infraestructura y las aplicaciones; un operador en el cluster reconcilia continuamente el estado real con el declarado en el repo.
+
+**En la práctica:** los cuatro principios: estado deseado declarativo, versionado en Git, cambios por PR con revisión y CI, y reconciliación automática (pull). Push vs. pull: en **pull**, el agente dentro del cluster observa el repo (ArgoCD/Flux) y no requiere exponer credenciales de cluster a CI/CD; el agente detecta **drift** (config cambia por fuera de Git) y lo corrige. ArgoCD (App of Apps, aplicaciones progresivas) vs. Flux (Kustomize/Kubernetes controllers). Secretos: Sealed Secrets, SOPS, External Secrets Operator.
+
+**Relacionado con:** [Rollback](#rollback--fix-forward) · **Profundizado en:** Módulo 12
 
 ---
 
@@ -279,6 +326,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 **Relacionado con:** [Saga](#saga) · **Profundizado en:** Módulo 03
 
+### OIDC (OpenID Connect) para CI/CD
+**Definición corta:** Protocolo que permite a los runners de CI/CD (GitHub Actions, GitLab CI) obtener credenciales **temporales y sin secretos** para acceder a los recursos de un proveedor cloud (AWS, GCP, Azure).
+
+**En la práctica:** el cloud publica un **OIDC provider**; el runner obtiene un token JWT firmado y lo canjea por credenciales de corta duración (STS en AWS). Elimina el **secret estático de largo plazo** guardado en el repo/CI (que era el vector de robo clásico). Se combina con **roles con least-privilege y conditions**: solo el repo/branch/environment correcto puede asumir el rol (ej: `repo: org/repo:ref:refs/heads/main`). Es la práctica recomendada frente a access keys clásicas.
+
+**Relacionado con:** [GitOps](#gitops) · [CI / Continuous Delivery / Continuous Deployment](#ci--continuous-delivery--continuous-deployment) · **Profundizado en:** Módulo 12
+
 ---
 
 ## P
@@ -289,6 +343,17 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 **En la práctica:** CAP solo cubre el comportamiento durante particiones; PACELC captura el trade-off del día a día: replicación síncrosa (consistente pero lenta) vs. asíncrona (rápida pero eventualmente consistente). Ejemplos: DynamoDB es PA/EL (disponible y baja latencia por defecto); PostgreSQL con replicación síncrona es PC/EC; muchos sistemas permiten elegir **por operación** (lectura consistente en DynamoDB cuesta el doble de RCUs).
 
 **Relacionado con:** [CAP Theorem](#cap-theorem) · [Consistencia eventual](#consistencia-eventual) · **Profundizado en:** Módulos 05 y 10
+
+---
+
+## Q
+
+### Quality Gate
+**Definición corta:** Conjunto de checks automáticos que un build debe pasar antes de poder promover a producción (o a un entorno).
+
+**En la práctica:** la pirámide: lint + unit tests + cobertura → SAST (escaneo estático de seguridad) → SCA/dependency review → container scan + SBOM → DAST → contract tests → smoke tests en producción → análisis de SLO tras el deploy. Cada gate detiene el pipeline con feedback rápido y **solo bloquea lo crítico** (un gate demasiado estricto ralentiza el CI; demasiado laxo no protege). Decide cuáles son blocking vs. informativo.
+
+**Relacionado con:** [CI / Continuous Delivery / Continuous Deployment](#ci--continuous-delivery--continuous-deployment) · **Profundizado en:** Módulo 12
 
 ---
 
@@ -318,6 +383,24 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 - Combinar con [Circuit Breaker](#circuit-breaker): reintentos contra un servicio caído solo lo hunden más.
 
 **Profundizado en:** Módulo 10
+
+### Rollback / Fix Forward
+**Definición corta:** Estrategias de recuperación tras un release fallido: **rollback** = volver a la versión anterior; **fix forward** = desplegar una corrección que avanza hacia adelante.
+
+**En la práctica:** la elección depende de la estrategia de despliegue y del estado de la base de datos:
+- **Blue-Green:** rollback es re-dirigir tráfico al entorno anterior (instantáneo).
+- **Canary:** detener la promoción y volcar tráfico a la versión buena.
+- **Feature flag:** apagar el flag (sin redeploy).
+- **git revert / re-deploy:** desplegar la versión anterior — *solo* si el esquema de BD no cambió incompatiblemente; con migraciones destructivas el rollback no basta y el **fix forward** es la vía (el clásico: "no se puede revertir una migración destructiva").
+
+**Relacionado con:** [Blue-Green](#blue-green-estrategia-de-despliegue) · [Canary](#canary-estrategia-de-despliegue) · [Deployment vs. Release](#deployment-vs-release) · **Profundizado en:** Módulo 12
+
+### Runner (GitHub Actions)
+**Definición corta:** Máquina que ejecuta los jobs de un workflow de GitHub Actions. Puede ser hosted (escala automática) o self-hosted (tu propia infraestructura, incluso efímera).
+
+**En la práctica:** los **self-hosted ephemeral** (contenedor/VMs desechables por job) son el estándar de seguridad: cada job corre limpio, sin credenciales persistentes y sin contaminación entre jobs; los permanentes self-hosted son un **riesgo** (un workflow malicioso puede ejecutar código con sus credenciales y acceso a red). Decisión senior: hosted para la mayoría; self-hosted efímero para requerimientos (hardware especial, red privada, costo).
+
+**Relacionado con:** [CI / Continuous Delivery / Continuous Deployment](#ci--continuous-delivery--continuous-deployment) · **Profundizado en:** Módulo 12
 
 ---
 

@@ -31,7 +31,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 | 09 | [Diseño de APIs](09-Diseño-de-APIs.md) (+ [Apéndice A](09-Diseño-de-APIs-Apendice-A.md)) | REST, GraphQL, gRPC, Webhooks, versionado, idempotencia |
 | 10 | [Escalabilidad y Resiliencia](10-Escalabilidad-y-Resiliencia.md) (+ [Apéndice A](10-Escalabilidad-y-Resiliencia-Apendice-A.md)) | Caching, Sharding, Replication, Circuit Breaker, Backpressure |
 | 11 | [Patrones de Diseño](11-Patrones-de-Diseño.md) (+ [Apéndice A](11-Patrones-de-Diseño-Apendice-A.md)) | GoF, patrones de arquitectura, estilos |
-| 12 | CI/CD moderno | GitHub Actions, estrategias de despliegue |
+| 12 | [CI/CD moderno](12-CI-CD-Moderno.md) (+ [Apéndice A](12-CI-CD-Moderno-Apendice-A.md)) | GitHub Actions, estrategias de despliegue |
 | 13 | AI-Assisted Development | Copilot, Claude Code, Cursor, agentes |
 | 14 | System Design Interview | Framework de entrevistas de diseño a nivel Senior |
 | 15 | Preguntas y ejercicios | Banco de preguntas técnicas y ejercicios prácticos |
