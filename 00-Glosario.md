@@ -73,6 +73,13 @@ Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID c
 
 **Profundizado en:** Módulo 14
 
+### Binary chop
+**Definición corta:** Técnica de debugging por **divide y vencerás**: acotar la búsqueda de la causa raíz partiendo el espacio de búsqueda por la mitad en cada iteración (stack frames, dataset o releases).
+
+**En la práctica:** el equivalente del binary search aplicado a la depuración. Frente a un stack trace de 64 frames, eliges el del medio y compruebas si el error ya se manifiesta ahí: si sí, el problema está antes; si no, después — en ≤ 6 cortes lo aíslas. Se aplica igual sobre un dataset que crashea (partir los datos hasta el mínimo que reproduce el fallo) o sobre un histórico de releases (un test que falla en la versión actual se corre contra la release intermedia hasta dar con el commit que lo introdujo — `git bisect` lo automatiza). Es la base del proceso *reproduce → acota* de una debugging round.
+
+**Relacionado con:** [Rubber ducking](#rubber-ducking) · **Profundizado en:** Módulo 15
+
 ### Blue-Green (estrategia de despliegue)
 **Definición corta:** Dos entornos de producción idénticos (blue y green); solo uno recibe tráfico en cada momento. El release es cambiar el router/load balancer hacia el otro entorno.
 
@@ -86,6 +93,13 @@ Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID c
 **En la práctica:** sin backpressure, un consumidor lento provoca colas infinitas, memoria agotada y caídas en cascada. Las estrategias incluyen: buffers acotados, rechazo explícito (load shedding), pausas en el productor, o colas intermedias (SQS) que absorben picos.
 
 **Profundizado en:** Módulo 10
+
+### Bulkhead (aislamiento por dependencia)
+**Definición corta:** Patrón de resiliencia que **aísla los recursos** (threads, conexiones, memoria) de cada dependencia externa en compartimentos separados, para que la degradación de una no agote los recursos de las demás.
+
+**En la práctica:** sin bulkhead, una dependencia lenta (proveedor de pagos, tercero) satura el pool de hilos compartido y tira *también* los endpoints que no la tocan (*thread starvation*). Con bulkhead, cada dependencia tiene su propio pool acotado (ej: 20 hilos para el proveedor de pagos, 100 para la DB): si el proveedor se degrada, solo se llenan sus 20 hilos y el resto del sistema respira. Se combina con [Circuit Breaker](#circuit-breaker) (el breaker corta, el bulkhead limita el daño) y con timeouts cortos. En el diseño de webhooks o colas por cliente, shardear por cliente *es* un bulkhead.
+
+**Relacionado con:** [Circuit Breaker](#circuit-breaker) · [Retry](#retry) · **Profundizado en:** Módulos 10 y 15
 
 ### BASE
 **Definición corta:** Modelo de consistencia alternativo a ACID: **B**asically **A**vailable, **S**oft state, **E**ventually consistent.
@@ -126,6 +140,13 @@ Las bases de datos relacionales tradicionales (PostgreSQL, MySQL) ofrecen ACID c
 
 **Relacionado con:** [Read-Through](#read-through-patrón-de-caché) · [Write-Through](#write-through-patrón-de-caché) · [Write-Behind](#write-behind-patrón-de-caché) · **Profundizado en:** Módulo 10
 
+### Cache failure modes (penetración / breakdown)
+**Definición corta:** Dos modos de fallo del caché distintos del *cache stampede*: **penetración** (consultas repetidas de claves inexistentes, que nunca se cachean y golpean siempre el origen) y **breakdown / avalancha** (una masa de claves expira a la vez y dispara miles de recargas simultáneas al origen).
+
+**En la práctica:** la **penetración** es típicamente un ataque o un patrón de datos escaso: un atacante pide `user:no-existe` con IDs aleatorios y cada request fuerza el recalculo contra la DB. Mitigación: **cachear el valor negativo** (un marcador con TTL corto) y/o un *Bloom filter* para rechazar claves inexistentes antes de llegar al origen. El **breakdown** aparece con TTL uniforme (100.000 keys con TTL de 300 s expiran en el mismo segundo): mitigación con **expiration randomization** (`TTL base + rand(0..300)`) o *jitter*. Un senior distingue los tres fallos de caché (stampede, penetración, breakdown) porque cada uno tiene su remedio distinto.
+
+**Relacionado con:** [Thundering herd](#thundering-herd-estampida) · [Cache-Aside](#cache-aside-patrón-de-caché) · **Profundizado en:** Módulo 15
+
 ### CAP Theorem
 **Definición corta:** En un sistema distribuido, ante una partición de red (**P**), debes elegir entre consistencia (**C**) y disponibilidad (**A**); no puedes tener ambas.
 
@@ -158,6 +179,13 @@ El teorema se malinterpreta a menudo: **C y A solo entran en conflicto durante u
 
 **Relacionado con:** [Hexagonal Architecture](#hexagonal-architecture) · [Onion Architecture](#onion-architecture) · **Profundizado en:** Módulo 01
 
+### Complejidad algorítmica (Big O)
+**Definición corta:** Notación que describe cómo crece el tiempo (o la memoria) de un algoritmo con el tamaño de la entrada; expresa la **escala de crecimiento asintótica**, no el tiempo exacto.
+
+**En la práctica:** el vocabulario que un backend usa para *decidir la estructura de datos* antes que el código: **hash map** para lookup por clave (O(1) promedio), **array** para acceso por índice (O(1)) pero inserción/borrado O(n), **lista enlazada** para inserción en cabeza (O(1)) pero acceso O(n), **árbol balanceado (B-tree)** para orden y rango (O(log n)), ordenar/ordenar es O(n log n). El criterio senior: la estructura correcta es la que *coincide con cómo se accede* en el hot path (¿lookup? ¿rango? ¿cola?), y el N+1 es el error clásico de convertir un O(1)-lookup en O(n)-por-fila. También se usa para dimensionar: un algoritmo O(n²) sobre 1M de filas no se "optimiza", se cambia de algoritmo.
+
+**Relacionado con:** [N+1 (problema de consulta)](#n1-problema-de-consulta) · **Profundizado en:** Módulo 15
+
 ### Consistencia eventual
 **Definición corta:** Garantía de que, si no hay nuevas escrituras, todas las réplicas de un dato convergerán al mismo valor en algún momento.
 
@@ -179,6 +207,13 @@ El teorema se malinterpreta a menudo: **C y A solo entran en conflicto durante u
 
 **Relacionado con:** [Event Sourcing](#event-sourcing) · **Profundizado en:** Módulo 03
 
+### Cursor pagination (keyset pagination)
+**Definición corta:** Técnica de paginación que recorre un dataset usando un **cursor** (la posición de la última fila vista) en lugar de un offset numérico: cada página continúa *desde donde quedó la anterior*.
+
+**En la práctica:** el SQL usa un predicado de rango sobre las columnas ordenadas (`WHERE (created_at, id) > ($1, $2) ORDER BY created_at, id LIMIT 20`) y explota el índice compuesto; cada página cuesta O(tamaño de página), no O(offset) como `OFFSET 1.000.000` (que escanea y descarta). El cursor suele ser un **base64** de `(created_at, id)` y el `id` de desempate garantiza un orden determinista con timestamps duplicados. Trade-off: si llegan datos nuevos, la "página 3" no es estable (nada te evita saltar/duplicar en el borde) — a cambio de estabilidad a escala. Es la respuesta estándar para feeds, activity logs y tablas grandes.
+
+**Relacionado con:** [N+1 (problema de consulta)](#n1-problema-de-consulta) · **Profundizado en:** Módulo 15
+
 ---
 
 ## D
@@ -189,6 +224,13 @@ El teorema se malinterpreta a menudo: **C y A solo entran en conflicto durante u
 **En la práctica:** distinguen equipos elite/high/medium/low. Despliegues frecuentes y baratos, lead time corto, baja tasa de fallos y recuperación rápida correlacionan con mayor rendimiento organizacional. Las métricas tienen **trade-offs**: desplegar más frecuente con gates mal puestos sube el Change Failure Rate; bajar MTTR a costa de sacrificar la causa raíz es deuda a futuro.
 
 **Relacionado con:** [CI / Continuous Delivery / Continuous Deployment](#ci--continuous-delivery--continuous-deployment) · **Profundizado en:** Módulo 12
+
+### Dead Letter Queue (DLQ)
+**Definición corta:** Cola auxiliar donde van a parar los mensajes que un consumidor **no pudo procesar** tras agotar los reintentos; los separa del flujo normal para no bloquearlo, sin perderlos.
+
+**En la práctica:** el consumidor reintenta (backoff + jitter); lo transitorio vuelve a la cola y lo que falla de forma **permanente** (400, schema inválido) se manda a la DLQ. La DLQ no es un basurero: es una **lista de trabajo pendiente de decisión** — reprocesarla requiere *clasificar* el motivo (transitorio → re-encolar; schema → corregir y archivar; desconocido → revisión humana), nunca re-encolar todo a ciegas. Reglas senior: **alertar cuando la DLQ crece** (es una métrica de observabilidad, no un estado oculto), monitorear su tasa (si no baja, el problema es del productor o del schema), y guardar el error estructurado en el mensaje para que el replay sea posible.
+
+**Relacionado con:** [At-least-once](#at-least-once-semántica-de-entrega) · [Outbox](#outbox-patrón--transactional-outbox) · [Retry](#retry) · **Profundizado en:** Módulos 03, 10 y 15
 
 ### Double-entry ledger (contabilidad de partida doble)
 **Definición corta:** Registro financiero **append-only e inmutable** donde cada transacción escribe **dos asientos que suman cero** (un débito y un crédito); los balances se derivan sumando asientos, nunca se almacenan como campo mutable.
@@ -214,6 +256,13 @@ El teorema se malinterpreta a menudo: **C y A solo entran en conflicto durante u
 Mapeo clave con microservicios: **cada Bounded Context es un candidato natural para un microservicio**.
 
 **Profundizado en:** Módulo 02
+
+### Deadlock
+**Definición corta:** Condición en la que dos o más procesos/transacciones quedan **bloqueados entre sí** esperando cada uno un recurso que el otro mantiene, sin que ninguno pueda avanzar (espera circular).
+
+**En la práctica:** en bases de datos aparece como `SQLSTATE 40P01 (deadlock detected)`: dos transacciones que bloquean filas en **orden distinto** (una `A→B`, otra `B→A`) se esperan mutuamente. El arreglo de raíz es **adquirir los locks en un orden canónico** (por id, por nombre — `sorted([from, to])`) para que la espera circular sea imposible; si aún ocurre, la base aborta una víctima y la transacción se **reintenta**. En código, el análogo son dos threads que se esperan con locks/condiciones en orden distinto (suele delatarse como *starvation* o *hang*). Señal senior en una debugging round: distinguir deadlock (espera circular) de race condition (resultado no determinista) y de starvation (un proceso nunca obtiene el recurso).
+
+**Relacionado con:** [Race condition / TOCTOU](#race-condition-toctou) · **Profundizado en:** Módulo 15
 
 ### Distributed Tracing
 **Definición corta:** Técnica que sigue una petición a través de todos los servicios que toca, asignándole un trace ID único que se propaga en los headers.
@@ -349,6 +398,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 **Relacionado con:** [Replication](#replication) · **Profundizado en:** Módulos 05 y 10
 
+### LRU (Least Recently Used)
+**Definición corta:** Política de evicción de caché que descarta la entrada **menos usada recientemente** cuando la caché alcanza su capacidad; combina frecuencia de uso con antigüedad.
+
+**En la práctica:** implementación canónica: **hash map + lista doblemente enlazada** — cada acceso mueve el nodo a la cabeza (más reciente), el evict quita la cola (menos reciente), todo en O(1). La evicción por LRU asume *locality temporal* (lo usado hace poco se usará pronto), que es lo que hace que una caché acotada acierte. En diseño de sistemas se combina con **TTL** (LRU controla el tamaño, TTL controla la frescura): el TTL se gestiona con *lazy eviction* (borrar al leer) + *sampling sweep* (barrido periódico por buckets) para que la expiración no sea un spike de CPU. Alternativas: LFU (por frecuencia), FIFO, o random (la que usa Memcached).
+
+**Relacionado con:** [Cache-Aside](#cache-aside-patrón-de-caché) · [Cache failure modes](#cache-failure-modes-penetración-breakdown) · **Profundizado en:** Módulo 15
+
 ---
 
 ## M
@@ -367,6 +423,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 **Relacionado con:** [Agent loop](#agent-loop) · [Prompt injection](#prompt-injection) · **Profundizado en:** Módulo 13
 
+### Memory leak (fuga de memoria)
+**Definición corta:** Consumo de memoria que **crece de forma monótona** porque el programa retiene referencias a objetos que ya no necesita; con el tiempo agota la RAM y termina en OOM o degradación.
+
+**En la práctica:** el modo de fallo clásico es un **caché/registro sin límite ni expulsión**: un `Map` de clientes por `tenantId`, sesiones o websockets que nunca expulsa entradas — crece con la *cardinalidad* de claves únicas, no con el tráfico real, y se manifiesta como RSS que sube hasta el reinicio por OOM. Diagnóstico con **heap snapshots** (comparar dos snapshots separados y ver qué crece sin parar), y con `--trace-gc`, `MAT`/`jmap`, etc. según runtime. Arreglo de raíz: **acotar con LRU + TTL** o cerrar explícitamente los recursos. Señal senior: distinguir *leak* (referencia que no se libera) de *fragmentación* o de *caché legítima sin límite*, y recordar que reiniciar el proceso solo oculta el síntoma.
+
+**Relacionado con:** [LRU](#lru-least-recently-used) · **Profundizado en:** Módulo 15
+
 ### (Microservicios)
 **Definición corta:** Estilo arquitectónico donde la aplicación se estructura como servicios pequeños, autónomos, desplegables independientemente, modelados alrededor de dominios de negocio.
 
@@ -384,6 +447,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 **Tipos:** clave-valor (DynamoDB, Redis), documentales (MongoDB, DocumentDB), columnares (Cassandra, HBase), grafos (Neo4j, Neptune). El punto clave: NoSQL no significa "sin estructura", significa **modelar según los patrones de acceso** en lugar de normalizar; y aceptar trade-offs de consistencia ([BASE](#base)) a cambio de escala y disponibilidad ([CAP](#cap-theorem)).
 
 **Profundizado en:** Módulo 05
+
+### N+1 (problema de consulta)
+**Definición corta:** Anti-patrón de acceso a datos donde, para listar *N* registros, el código ejecuta **1 consulta por cada uno** (una query por fila) en lugar de una consulta por lote: 1 + N queries totales.
+
+**En la práctica:** el ejemplo clásico: listar 200 pedidos y luego, en un loop, consultar los items de cada uno → 201 queries (por eso se llama N+1). El coste se multiplica con la profundidad (pedidos → items → producto). Solución: **una sola query con `WHERE id = ANY(...)`** (o un JOIN si el producto de filas no explota) y agrupar en memoria. Se detecta con `EXPLAIN`, query log o métricas de carga de la DB (CPU al 100% con pocos usuarios); las herramientas ORM lo emiten silenciosamente, por eso se vigila. Es un síntoma de no *batchear I/O*; el senior lo identifica por el patrón "cada fila dispara una consulta" y mide antes de arreglar.
+
+**Relacionado con:** [Complejidad algorítmica (Big O)](#complejidad-algorítmica-big-o) · [Cursor pagination](#cursor-pagination-keyset-pagination) · **Profundizado en:** Módulo 15
 
 ---
 
@@ -457,6 +527,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 
 ## R
 
+### Race condition / TOCTOU
+**Definición corta:** Condición de concurrencia en la que el resultado **depende del orden de ejecución** de operaciones concurrentes; el bug aparece "solo a veces" y bajo carga. **TOCTOU** (*time-of-check to time-of-use*) es su forma más común: validar algo y luego actuar sobre él, entre medias otro proceso lo cambió.
+
+**En la práctica:** el caso clásico del checkout: el código lee `stock` (check), valida, y luego decrementa (use) — dos pedidos simultáneos leen `stock=1`, ambos pasan la validación y el segundo sobrevende. La causa raíz es que **el check y el use no están en la misma operación atómica**. Solución: hacerlo *atómico* (`UPDATE ... WHERE stock >= $1 RETURNING`, conditional writes, locks optimistas con versions). La variante en código (threads) es igual: dos hilos leen un flag y uno escribe → resultado no determinista. La variante de diseño es el *hot key* (muchos clientes compiten por la misma clave). Un senior en debugging: reproduce bajo concurrencia (no "a ojo"), formula la hipótesis "es TOCTOU: check y use no son atómicos" y la verifica con un test concurrente.
+
+**Relacionado con:** [Deadlock](#deadlock) · [Idempotencia](#idempotencia) · **Profundizado en:** Módulos 03, 10 y 15
+
 ### Rate Limiting
 **Definición corta:** Control del número de peticiones que un cliente puede hacer en una ventana de tiempo.
 
@@ -506,6 +583,13 @@ La respuesta correcta en producción es casi siempre: at-least-once + idempotenc
 **En la práctica:** los **self-hosted ephemeral** (contenedor/VMs desechables por job) son el estándar de seguridad: cada job corre limpio, sin credenciales persistentes y sin contaminación entre jobs; los permanentes self-hosted son un **riesgo** (un workflow malicioso puede ejecutar código con sus credenciales y acceso a red). Decisión senior: hosted para la mayoría; self-hosted efímero para requerimientos (hardware especial, red privada, costo).
 
 **Relacionado con:** [CI / Continuous Delivery / Continuous Deployment](#ci--continuous-delivery--continuous-deployment) · **Profundizado en:** Módulo 12
+
+### Rubber ducking
+**Definición corta:** Técnica de debugging en la que **explicas el problema en voz alta** (a un compañero, a un pato de goma, al planta) paso a paso, hasta que la solución "salta" por sí sola.
+
+**En la práctica:** funciona porque verbalizar obliga a **explicitar los supuestos** que das por sentados al leer el código ("asumo que este array está ordenado", "asumo que este service no devuelve null"). El acto de explicar el flujo hace visible el salto lógico que no ves. En entrevistas de debugging, el *explain-out-loud* es parte evaluada: un candidato que se calla y edita "a ciegas" pierde puntos; uno que dice "ok, aquí recibo X, paso a Y, espero Z, pero Z depende de…" revela su razonamiento. No se trata de tener razón: se trata de **hacer pensar el problema audiblemente**.
+
+**Relacionado con:** [Binary chop](#binary-chop) · **Profundizado en:** Módulo 15
 
 ---
 
@@ -602,6 +686,13 @@ No hay rollback real (los datos ya fueron commit): la compensación es una opera
 ---
 
 ## W
+
+### Webhook
+**Definición corta:** Mecanismo por el cual un servicio **llama de vuelta (HTTP) a una URL que tú registras** para notificarte de un evento, en lugar de que tú lo consultes (inversión de la relación de petición).
+
+**En la práctica:** el emisor mantiene una lista de endpoints suscritos y hace `POST` con el payload cuando ocurre el evento; el receptor responde rápido (2xx = entendido) y el emisor reintenta con backoff+jitter si falla, con una DLQ para lo permanente. Es el patrón ligero de *push* asíncrono, usado por GitHub, Stripe, APIs públicas. Decisiones senior: el emisor **no debe bloquear** en el webhook (se encola), la **firma HMAC** verifica que la llamada viene del emisor real (y el replay), los **idempotency keys** evitan efectos duplicados si el receptor recibe el mismo evento dos veces, y se versiona la carga. Diseñar un *webhook delivery service* implica todo lo anterior: retries, firma, orden no garantizada y dedupe por `event_id`. Alternativa: **SSE** para unidireccional, o polling para los que no exponen URLs públicas.
+
+**Relacionado con:** [Idempotencia](#idempotencia) · [Dead Letter Queue (DLQ)](#dead-letter-queue-dlq) · **Profundizado en:** Módulo 15
 
 ### WebSocket
 **Definición corta:** Protocolo que mantiene una **conexión TCP bidireccional y persistente** entre cliente y servidor, permitiendo al servidor *empujar* datos sin polling (RFC 6455).

@@ -11,7 +11,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 - Cada módulo es un archivo Markdown independiente y autocontenido.
 - El módulo 00 es un glosario vivo que crece con cada módulo: cuando encuentres un término que no domines, búscalo ahí.
 - Los módulos se referencian entre sí; puedes seguir el orden numérico o saltar a lo que necesites usando el índice.
-- La estructura interna de cada módulo es siempre la misma: **Introducción → Conceptos → Arquitectura → Internals → Patrones → Casos reales → Laboratorio → Entrevistas → Checklist**.
+- La estructura interna de cada módulo (01–14) es siempre la misma: **Introducción → Conceptos → Arquitectura → Internals → Patrones → Casos reales → Laboratorio → Entrevistas → Checklist**. Los módulos 15 y 16 ajustan la forma a su contenido (banco de preguntas / roadmap).
 
 ---
 
@@ -34,7 +34,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 | 12 | [CI/CD moderno](12-CI-CD-Moderno.md) (+ [Apéndice A](12-CI-CD-Moderno-Apendice-A.md)) | GitHub Actions, estrategias de despliegue |
 | 13 | [AI-Assisted Development](13-AI-Assisted-Development.md) (+ [Apéndice A](13-AI-Assisted-Development-Apendice-A.md)) | Copilot, Claude Code, Cursor, Codex, OpenCode, agentes, MCP, context engineering |
 | 14 | [System Design Interview](14-System-Design-Interview.md) (+ [Apéndice A](14-System-Design-Interview-Apendice-A.md)) | Pensar como arquitecto, framework de entrevista, estimaciones, casos: Twitter/X, Netflix, Uber, WhatsApp, pagos, notificaciones |
-| 15 | Preguntas y ejercicios | Banco de preguntas técnicas y ejercicios prácticos |
+| 15 | [Preguntas y ejercicios](15-Preguntas-y-Ejercicios.md) (+ [Apéndice A](15-Preguntas-y-Ejercicios-Apendice-A.md)) | Banco de preguntas por nivel (Junior/Mid/Senior) respondidas como senior, rubric 2026, ejercicios prácticos, debugging rounds y diseño de bajo nivel |
 | 16 | Roadmap y Proyecto Final | Plan de estudio, laboratorios integradores, proyecto capstone |
 
 *(Los enlaces se activan a medida que se genera cada módulo.)*
