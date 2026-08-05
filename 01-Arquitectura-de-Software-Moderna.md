@@ -4,7 +4,7 @@
 
 > Este módulo es el mapa inicial del libro. Los detalles de DynamoDB, Caching, Event-Driven, Serverless o IaC tendrán módulo propio (04–12). Aquí construimos el mapa de TODAS las arquitecturas y el framework de decisión que usarás en los 15 módulos restantes.
 
-**Mecanismos suplementarios de este módulo:** Fitness Functions, Contract Testing, estrategias de despliegue internas, ADRs, comparativa SQL/NoSQL aplicada a arquitectura y testing piramidal se cubren en el **Apéndice A** (`01-Arquitectura-de-Software-Moderna-Apendice-A.md`), enlazado al final.
+**Mecanismos suplementarios de este módulo:** Fitness Functions, Contract Testing, estrategias de despliegue internas, ADRs, comparativa SQL/NoSQL aplicada a arquitectura y testing piramidal se cubren en el **Apéndice A** (`appends/01-Arquitectura-de-Software-Moderna-Apendice-A.md`), enlazado al final.
 
 ---
 
@@ -928,9 +928,7 @@ Corolarios para la mentalidad senior: **los trade-offs no se resuelven una vez y
 
 ---
 
-## Apéndice A — Mecanismos Suplementarios
-
-Ver archivo separado: `01-Arquitectura-de-Software-Moderna-Apendice-A.md`
+## [Apéndice A](appends/01-Arquitectura-de-Software-Moderna-Apendice-A.md) — Mecanismos Suplementarios
 
 Contiene:
 
@@ -940,7 +938,3 @@ Contiene:
 - Plantilla completa de ADR (Architecture Decision Record).
 - Comparativa SQL vs NoSQL aplicada a decisiones arquitectónicas.
 - Testing piramidal aplicado a arquitectura (unit, integration, contract, e2e) con implicaciones de cada estilo.
-
----
-
-**Fin del Módulo 01. Cuando esté validado, actualizaremos cross-references profundos con el Glosario y pasaremos al Módulo 02 (Microservicios y DDD) según la secuencia acordada.**

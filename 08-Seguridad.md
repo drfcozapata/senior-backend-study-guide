@@ -243,65 +243,65 @@ Situar WAF (reglas OWASP), TLS moderno, headers de seguridad (`Strict-Transport-
 
 ## Entrevistas
 
-**1. "¿Cómo autenticarías y autorizarías una API de microservicios? ¿Dónde pondrías la frontera de seguridad?"**
+1. **"¿Cómo autenticarías y autorizarías una API de microservicios? ¿Dónde pondrías la frontera de seguridad?"**
 
-**Orientación:** busca que distingas AuthN de AuthZ, que propongas una frontera clara (borde vs servicio), y que menciones tokens _short-lived_ y validación de audiencia. Un junior dice "JWT en todos lados"; un senior explica qué protege cada capa.
+   **Orientación:** busca que distingas AuthN de AuthZ, que propongas una frontera clara (borde vs servicio), y que menciones tokens _short-lived_ y validación de audiencia. Un junior dice "JWT en todos lados"; un senior explica qué protege cada capa.
 
-**Respuesta de un senior:** separo AuthN (identidad) de AuthZ (permiso). La autenticación la resuelvo en el borde o con un identity provider (Cognito, OIDC): el usuario obtiene un access token corto (5–15 min) y un refresh token con rotación. Cada microservicio valida el JWT como _resource server_: verifica firma (RS256/ES256 vía JWKS, nunca fiar del `alg` del header), `iss`, `aud` (que el token sea para _ese_ servicio), `exp` y `scope`. La autorización fina la hago en la capa de aplicación — ABAC con atributos (`orders/123` solo si `document.owner == sub`) — porque el token no basta para decidir sobre un recurso específico. Entre servicios, para comunicaciones internas uso client credentials o mTLS bajo Zero Trust: nadie dentro de la red es de fiar por defecto.
+   **Respuesta de un senior:** separo AuthN (identidad) de AuthZ (permiso). La autenticación la resuelvo en el borde o con un identity provider (Cognito, OIDC): el usuario obtiene un access token corto (5–15 min) y un refresh token con rotación. Cada microservicio valida el JWT como _resource server_: verifica firma (RS256/ES256 vía JWKS, nunca fiar del `alg` del header), `iss`, `aud` (que el token sea para _ese_ servicio), `exp` y `scope`. La autorización fina la hago en la capa de aplicación — ABAC con atributos (`orders/123` solo si `document.owner == sub`) — porque el token no basta para decidir sobre un recurso específico. Entre servicios, para comunicaciones internas uso client credentials o mTLS bajo Zero Trust: nadie dentro de la red es de fiar por defecto.
 
-**2. "¿Cuál es la diferencia entre OAuth 2 y OpenID Connect? ¿Cuándo usas cada uno?"**
+2. **"¿Cuál es la diferencia entre OAuth 2 y OpenID Connect? ¿Cuándo usas cada uno?"**
 
-**Orientación:** el candidato debe saber que OAuth 2 es un framework de _autorización_ (delegar acceso) y OIDC es autenticación construida sobre él. Un error común es "OAuth es login".
+   **Orientación:** el candidato debe saber que OAuth 2 es un framework de _autorización_ (delegar acceso) y OIDC es autenticación construida sobre él. Un error común es "OAuth es login".
 
-**Respuesta de un senior:** OAuth 2 define cómo un tercero accede a recursos protegidos en nombre del usuario (delegación): el recurso principal es el **access token**. OIDC es una capa sobre OAuth 2 que añade el **ID token** (un JWT con claims de identidad: `sub`, `email`, `name`) y el endpoint `userinfo`, para autenticar quién es el usuario. La regla práctica: si necesitas _login_ (quién es) → OIDC; si necesitas _delegar acceso_ (qué puede hacer una app en nombre del usuario) → OAuth 2. Usamos OIDC con PKCE para el login de la SPA; el microservicio que consume la API recibe el access token OAuth.
+   **Respuesta de un senior:** OAuth 2 define cómo un tercero accede a recursos protegidos en nombre del usuario (delegación): el recurso principal es el **access token**. OIDC es una capa sobre OAuth 2 que añade el **ID token** (un JWT con claims de identidad: `sub`, `email`, `name`) y el endpoint `userinfo`, para autenticar quién es el usuario. La regla práctica: si necesitas _login_ (quién es) → OIDC; si necesitas _delegar acceso_ (qué puede hacer una app en nombre del usuario) → OAuth 2. Usamos OIDC con PKCE para el login de la SPA; el microservicio que consume la API recibe el access token OAuth.
 
-**3. "¿Qué pasa si un access token se filtra? ¿Cómo lo mitigas?"**
+3. **"¿Qué pasa si un access token se filtra? ¿Cómo lo mitigas?"**
 
-**Orientación:** busca comprensión del _trade-off_ stateless vs revocación. El candidato debe mencionar vida corta, rotación, y alternativas (session store/blocklist).
+   **Orientación:** busca comprensión del _trade-off_ stateless vs revocación. El candidato debe mencionar vida corta, rotación, y alternativas (session store/blocklist).
 
-**Respuesta de un senior:** el token filtrado vale hasta que expire, así que la primera línea es **acortar su vida** (5–15 min) y tener **refresh tokens rotados** y con _reuse detection_. Si roban el refresh y lo reutilizan, revocamos toda la sesión. Si necesito revocación inmediata, paso a sesiones server-side (Redis) o a una blocklist de `jti` — asumo el costo de estado a cambio de control. Además, el token nunca debe viajar en URL ni persistirse en `localStorage`; uso cookies `HttpOnly`/`Secure`/`SameSite` o memoria del cliente. Y audito con CloudTrail/logs: saber que hubo fuga es tan importante como mitigarla.
+   **Respuesta de un senior:** el token filtrado vale hasta que expire, así que la primera línea es **acortar su vida** (5–15 min) y tener **refresh tokens rotados** y con _reuse detection_. Si roban el refresh y lo reutilizan, revocamos toda la sesión. Si necesito revocación inmediata, paso a sesiones server-side (Redis) o a una blocklist de `jti` — asumo el costo de estado a cambio de control. Además, el token nunca debe viajar en URL ni persistirse en `localStorage`; uso cookies `HttpOnly`/`Secure`/`SameSite` o memoria del cliente. Y audito con CloudTrail/logs: saber que hubo fuga es tan importante como mitigarla.
 
-**4. "¿Cómo protegerías secretos en una arquitectura serverless? ¿Qué harías si se filtra uno?"**
+4. **"¿Cómo protegerías secretos en una arquitectura serverless? ¿Qué harías si se filtra uno?"**
 
-**Orientación:** el candidato debe ir más allá de "no subirlos a Git": rotación, cifrado, acceso mínimo y plan de respuesta.
+   **Orientación:** el candidato debe ir más allá de "no subirlos a Git": rotación, cifrado, acceso mínimo y plan de respuesta.
 
-**Respuesta de un senior:** los secretos viven en **Secrets Manager** (con rotación automática) o **Parameter Store SecureString**; las claves de cifrado en **KMS** con políticas de uso mínimas. Los entrego a las funciones en runtime por variable de entorno o vía SDK, nunca en el código ni en el build. Nunca en VCS: guardrail en CI con `git-secrets`/escaneo de repos. Si se filtra: **rotar inmediatamente** (Secrets Manager cambia el valor y lo propaga), revocar las credenciales comprometidas, auditar con CloudTrail quién pudo acceder, y revisar el _blast radius_ — y documentar el incidente como lección.
+   **Respuesta de un senior:** los secretos viven en **Secrets Manager** (con rotación automática) o **Parameter Store SecureString**; las claves de cifrado en **KMS** con políticas de uso mínimas. Los entrego a las funciones en runtime por variable de entorno o vía SDK, nunca en el código ni en el build. Nunca en VCS: guardrail en CI con `git-secrets`/escaneo de repos. Si se filtra: **rotar inmediatamente** (Secrets Manager cambia el valor y lo propaga), revocar las credenciales comprometidas, auditar con CloudTrail quién pudo acceder, y revisar el _blast radius_ — y documentar el incidente como lección.
 
-**5. "¿Qué es el 'alg:none' y por qué es un riesgo? ¿Cómo lo previenes?"**
+5. **"¿Qué es el 'alg:none' y por qué es un riesgo? ¿Cómo lo previenes?"**
 
-**Orientación:** pregunta de cultura de seguridad + detalles de JWT. Un candidato fuerte conoce el bug histórico y la mitigación (fijar algoritmo).
+   **Orientación:** pregunta de cultura de seguridad + detalles de JWT. Un candidato fuerte conoce el bug histórico y la mitigación (fijar algoritmo).
 
-**Respuesta de un senior:** `alg:none` es un modo del estándar JWT para tokens sin firma (para debugging). Un verificador mal configurado que acepta el `alg` del header puede aceptar un token que un atacante forjó sin firma. Se previene **nunca** dejando que el header decida: en el validador se fija la lista de algoritmos permitidos (`algorithms=["RS256"]`) y se rechaza todo lo demás. Es la misma familia que _algorithm confusion_ (RS256→HS256): el verificador debe fijar el algoritmo y el tipo de clave, y verificar `kid` contra el JWKS correcto.
+   **Respuesta de un senior:** `alg:none` es un modo del estándar JWT para tokens sin firma (para debugging). Un verificador mal configurado que acepta el `alg` del header puede aceptar un token que un atacante forjó sin firma. Se previene **nunca** dejando que el header decida: en el validador se fija la lista de algoritmos permitidos (`algorithms=["RS256"]`) y se rechaza todo lo demás. Es la misma familia que _algorithm confusion_ (RS256→HS256): el verificador debe fijar el algoritmo y el tipo de clave, y verificar `kid` contra el JWKS correcto.
 
-**6. "¿Cuál es la diferencia entre RBAC y ABAC? ¿Cuál elegirías para una app multitenant?"**
+6. **"¿Cuál es la diferencia entre RBAC y ABAC? ¿Cuál elegirías para una app multitenant?"**
 
-**Orientación:** los entrevistadores (típicamente en plataformas) quieren ver que el candidato pesa granularidad vs complejidad administrativa.
+   **Orientación:** los entrevistadores (típicamente en plataformas) quieren ver que el candidato pesa granularidad vs complejidad administrativa.
 
-**Respuesta de un senior:** RBAC asigna permisos a roles; es simple de administrar pero grueso y difícil de escalar cuando los permisos dependen del _contexto_. ABAC decide por atributos del principal, del recurso y del entorno (owner del documento, tenant, departamento, hora). En multitenancy elijo ABAC: los permisos se expresan como _"puede leer su propia fila en su tenant"_ sin crear un rol por tenant. En AWS lo implemento con tags y `Condition`. Pero matizo: empiezo por RBAC simple para arrancar, y escalo a ABAC cuando el modelo de roles explota.
+   **Respuesta de un senior:** RBAC asigna permisos a roles; es simple de administrar pero grueso y difícil de escalar cuando los permisos dependen del _contexto_. ABAC decide por atributos del principal, del recurso y del entorno (owner del documento, tenant, departamento, hora). En multitenancy elijo ABAC: los permisos se expresan como _"puede leer su propia fila en su tenant"_ sin crear un rol por tenant. En AWS lo implemento con tags y `Condition`. Pero matizo: empiezo por RBAC simple para arrancar, y escalo a ABAC cuando el modelo de roles explota.
 
-**7. "¿Qué significa 'fail-closed' en seguridad? Da un ejemplo real."**
+7. **"¿Qué significa 'fail-closed' en seguridad? Da un ejemplo real."**
 
-**Orientación:** evalúa la mentalidad de seguridad (seguro por defecto) y la calidad del ejemplo.
+   **Orientación:** evalúa la mentalidad de seguridad (seguro por defecto) y la calidad del ejemplo.
 
-**Respuesta de un senior:** fail-closed significa que ante un error o ambigüedad, **niego el acceso por defecto** en lugar de concederlo. Ejemplo: en la capa de autorización, si un atributo requerido falta o la validación del token falla con una excepción, el default debe ser `403/401`, no "continúa con acceso parcial". Otro ejemplo: un handler de errores que ante una validación fallida de input devuelve `400` sin ejecutar la lógica, en lugar de "intentar seguir". En diseño de sistemas, también aplica a timeouts de comunicación: si no sabes si la operación se aplicó, no repitas un débito sin idempotencia.
+   **Respuesta de un senior:** fail-closed significa que ante un error o ambigüedad, **niego el acceso por defecto** en lugar de concederlo. Ejemplo: en la capa de autorización, si un atributo requerido falta o la validación del token falla con una excepción, el default debe ser `403/401`, no "continúa con acceso parcial". Otro ejemplo: un handler de errores que ante una validación fallida de input devuelve `400` sin ejecutar la lógica, en lugar de "intentar seguir". En diseño de sistemas, también aplica a timeouts de comunicación: si no sabes si la operación se aplicó, no repitas un débito sin idempotencia.
 
-**8. "¿Cómo manejarías tokens en una SPA (JWT vs cookies)? ¿Y CSRF?"**
+8. **"¿Cómo manejarías tokens en una SPA (JWT vs cookies)? ¿Y CSRF?"**
 
-**Orientación:** el candidato debe equilibrar la exposición a XSS (JWT en `localStorage`) contra CSRF (cookies), y conocer `SameSite`.
+   **Orientación:** el candidato debe equilibrar la exposición a XSS (JWT en `localStorage`) contra CSRF (cookies), y conocer `SameSite`.
 
-**Respuesta de un senior:** si guardo el access token en `localStorage`, cualquier XSS puede leerlo → prefiero **cookies `HttpOnly` + `Secure` + `SameSite=Strict`** para el refresh y el session cookie, y el access token en memoria. `HttpOnly` evita que JS lo lea; `SameSite=Strict` mitiga CSRF al no enviar la cookie en requests cross-site; para peticiones que sí necesitan cross-site, uso tokens anti-CSRF (doble envío o header personalizado) y valido el header `Origin`/`Referer`. Con cookies, la sesión es revocable server-side, lo que también responde a la pregunta de revocación.
+   **Respuesta de un senior:** si guardo el access token en `localStorage`, cualquier XSS puede leerlo → prefiero **cookies `HttpOnly` + `Secure` + `SameSite=Strict`** para el refresh y el session cookie, y el access token en memoria. `HttpOnly` evita que JS lo lea; `SameSite=Strict` mitiga CSRF al no enviar la cookie en requests cross-site; para peticiones que sí necesitan cross-site, uso tokens anti-CSRF (doble envío o header personalizado) y valido el header `Origin`/`Referer`. Con cookies, la sesión es revocable server-side, lo que también responde a la pregunta de revocación.
 
-**9. "Explica cómo una política de IAM de AWS decide permitir o denegar. ¿Qué son los permissions boundaries?"**
+9. **"Explica cómo una política de IAM de AWS decide permitir o denegar. ¿Qué son los permissions boundaries?"**
 
-**Orientación:** pregunta de AWS + seguridad. El candidato debe conocer el orden de evaluación (deny explícito > allow, deny implícito) y el concepto de boundary.
+   **Orientación:** pregunta de AWS + seguridad. El candidato debe conocer el orden de evaluación (deny explícito > allow, deny implícito) y el concepto de boundary.
 
-**Respuesta de un senior:** AWS evalúa en este orden: primero **deny explícito** (si existe, siempre gana), luego **allow explícito** de las políticas aplicables (identity-based + resource-based), y si no hay allow, el **deny implícito** deniega por defecto. Un **permissions boundary** es una política que define el _máximo_ de permisos que puede tener un rol/principal, aunque una política más amplia diga lo contrario — útil para dar a un equipo IAM delegado sin riesgo de escalada total. Lo combino con condiciones (ABAC, tags) y con `iam:simulate-principal-policy` para probar antes de desplegar.
+   **Respuesta de un senior:** AWS evalúa en este orden: primero **deny explícito** (si existe, siempre gana), luego **allow explícito** de las políticas aplicables (identity-based + resource-based), y si no hay allow, el **deny implícito** deniega por defecto. Un **permissions boundary** es una política que define el _máximo_ de permisos que puede tener un rol/principal, aunque una política más amplia diga lo contrario — útil para dar a un equipo IAM delegado sin riesgo de escalada total. Lo combino con condiciones (ABAC, tags) y con `iam:simulate-principal-policy` para probar antes de desplegar.
 
-**10. "¿Qué es Zero Trust? ¿Cómo lo aplicarías entre microservicios?"**
+10. **"¿Qué es Zero Trust? ¿Cómo lo aplicarías entre microservicios?"**
 
-**Orientación:** evalúa si el candidato piensa la seguridad _entre_ servicios, no solo en el borde.
+    **Orientación:** evalúa si el candidato piensa la seguridad _entre_ servicios, no solo en el borde.
 
-**Respuesta de un senior:** Zero Trust parte de que **no existe confianza implícita por estar dentro de la red**: cada request se autentica, autoriza y cifra por separado, aunque vaya de servicio A a servicio B en la misma VPC. Lo aplico con: (1) **mTLS** en la malla de servicios (ambas partes presentan certificados emitidos por una CA interna), (2) **client credentials / SPIFFE** para la identidad del workload, (3) autorización por política (scope/claim) en cada servicio receptor — no solo en el gateway — y (4) políticas de red restrictivas (security groups, no trust "todo dentro"). El trade-off es complejidad operativa: la justifico cuando el riesgo o el tamaño del sistema lo ameritan.
+    **Respuesta de un senior:** Zero Trust parte de que **no existe confianza implícita por estar dentro de la red**: cada request se autentica, autoriza y cifra por separado, aunque vaya de servicio A a servicio B en la misma VPC. Lo aplico con: (1) **mTLS** en la malla de servicios (ambas partes presentan certificados emitidos por una CA interna), (2) **client credentials / SPIFFE** para la identidad del workload, (3) autorización por política (scope/claim) en cada servicio receptor — no solo en el gateway — y (4) políticas de red restrictivas (security groups, no trust "todo dentro"). El trade-off es complejidad operativa: la justifico cuando el riesgo o el tamaño del sistema lo ameritan.
 
 ---
 
@@ -332,3 +332,7 @@ Situar WAF (reglas OWASP), TLS moderno, headers de seguridad (`Strict-Transport-
 - AWS IAM documentation — _Policy evaluation logic_, permissions boundaries, ABAC.
 - AWS Security Blog — OAuth 2.1 / Cognito / WAF best practices.
 - [Módulo 01](01-Arquitectura-de-Software-Moderna.md), [Módulo 02](02-Microservicios-y-DDD.md), [Módulo 04](04-AWS-Serverless.md), [Módulo 06](06-Infraestructura-como-Codigo.md), [Módulo 07](07-Observabilidad.md).
+
+---
+
+> _Más profundidad e implementaciones de referencia en el [**Apéndice A**](appends/08-Seguridad-Apendice-A.md)._

@@ -11,6 +11,7 @@
 En la práctica profesional, "microservicios" no es sólo la respuesta a la escala; es una **decisión organizativa y de dominio**. La mayoría de los proyectos fracasan no por la tecnología, sino por haber trazado los límites con criterios técnicos (muestreos) en lugar de criterios de negocio. DDD ("Domain-Driven Design", Evans, 2003) nació para corregir esto: modelar software según el dominio, no según la infraestructura.
 
 En este módulo combinamos dos hilos:
+
 1. El **qué y cómo** de los microservicios (fundamentos, comunicación, consistencia, patrones).
 2. El **dónde trazar los límites** (DDD estratégico y táctico).
 
@@ -45,14 +46,14 @@ Estos "anti-fakes" son los que llenan de incidentes las empresas:
 
 ### Diferencias entre SOA y Microservicios
 
-| Aspecto | SOA (hacia 2005+) | Microservicios (2012+) |
-|---|---|---|
-| **Filosofía** | Reutilización empresarial e integración central (ESB) | Autonomía de dominio y despliegue independiente |
-| **Granularidad** | Servicios grandes tipo columna vertebral empresarial | Servicios finos alineados a un bounded context |
-| **Comunicación** | ESB central, XML/SOAP, orquestación pesada | REST/JSON, gRPC, eventos; coreografía preferida |
-| **Datos** | Canonical models compartidos entre servicios | **Database per service** (cada servicio es dueño de su dato) |
-| **Despliegue** | Largos ciclos, registros SOA, coordinación central | CI/CD continuo, canary, feature flags |
-| **Gobernanza** | Comité central de arquitectura | Fitness functions, equipos autónomos |
+| Aspecto          | SOA (hacia 2005+)                                     | Microservicios (2012+)                                       |
+| ---------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| **Filosofía**    | Reutilización empresarial e integración central (ESB) | Autonomía de dominio y despliegue independiente              |
+| **Granularidad** | Servicios grandes tipo columna vertebral empresarial  | Servicios finos alineados a un bounded context               |
+| **Comunicación** | ESB central, XML/SOAP, orquestación pesada            | REST/JSON, gRPC, eventos; coreografía preferida              |
+| **Datos**        | Canonical models compartidos entre servicios          | **Database per service** (cada servicio es dueño de su dato) |
+| **Despliegue**   | Largos ciclos, registros SOA, coordinación central    | CI/CD continuo, canary, feature flags                        |
+| **Gobernanza**   | Comité central de arquitectura                        | Fitness functions, equipos autónomos                         |
 
 **La lección de SOA** (y lo que separa a un senior): la integración empresarial es inherentemente compleja; hacerla mediante un bus central (ESB) y modelos canónicos globales **agrega** complejidad y acoplamiento. Microservicios responden con autonomía y contratos ligeros, pero heredan el mismo reto de consistencia distribuida. No es que SOA estuviera "mal": es que el modelo de gobernanza y granularidad era demasiado centralizado para el mundo del cloud.
 
@@ -68,14 +69,14 @@ Estos "anti-fakes" son los que llenan de incidentes las empresas:
 
 En el [Módulo 01](01-Arquitectura-de-Software-Moderna.md) definimos el monilolito modular como puente excelente. Aquí la comparación directa que decide un proyecto:
 
-| Criterio | Monolito Modular | Microservicios |
-|---|---|---|
-| **Transaccionalidad** | ACID completo dentro del proceso | Consistencia eventual vía eventos (Saga) |
-| **Debugging** | Stack trace único, simple | Requiere distributed tracing y correlation IDs |
-| **Frecuencia de despliegue** | Despliegue en serie del conjunto | Independiente por servicio |
-| **Granularidad de escalado** | Todo o nada | Fina por servicio |
-| **Madurez organizativa** | Apto para equipo único | Requiere equipos independientes |
-| **Curva inicial** | Aplanada | Sobrecoste inicial alto, brilla a escala |
+| Criterio                     | Monolito Modular                 | Microservicios                                 |
+| ---------------------------- | -------------------------------- | ---------------------------------------------- |
+| **Transaccionalidad**        | ACID completo dentro del proceso | Consistencia eventual vía eventos (Saga)       |
+| **Debugging**                | Stack trace único, simple        | Requiere distributed tracing y correlation IDs |
+| **Frecuencia de despliegue** | Despliegue en serie del conjunto | Independiente por servicio                     |
+| **Granularidad de escalado** | Todo o nada                      | Fina por servicio                              |
+| **Madurez organizativa**     | Apto para equipo único           | Requiere equipos independientes                |
+| **Curva inicial**            | Aplanada                         | Sobrecoste inicial alto, brilla a escala       |
 
 En la práctica, casi todos los equipos comienzan como **monolito modular** y **extraen** servicios a medida que crecen (strangler fig). Saltar directamente a microservicios es, para la mayoría de nuevas empresas, un error de costos.
 
@@ -94,13 +95,14 @@ Declaraciones firmes que un senior honesto debe poder decir:
 
 ## Domain-Driven Design (DDD)
 
-Conceptos de Eric Evans (*DDD: Tackling Complexity in the Heart of Software*, 2003). Los aplicamos aquí, directamente, al diseño de microservicios.
+Conceptos de Eric Evans (_DDD: Tackling Complexity in the Heart of Software_, 2003). Los aplicamos aquí, directamente, al diseño de microservicios.
 
 ### ¿Qué es un dominio?
 
 El universo específico de conocimiento y actividad que nuestro software aborda. Los dominios complejos tienen reglas, restricciones y stakeholders con experticia propia.
 
 Ejemplos:
+
 - **Banking:** transacciones, reglamentos, intereses.
 - **E-commerce:** catálogo, pedidos, inventario, recomendaciones.
 - **Delivery:** rutas, geolocalización, transportes, niveles de servicio.
@@ -110,15 +112,16 @@ Ejemplos:
 
 Todo dominio grande se divide y clasificamos:
 
-| Tipo | Definición | Valor competitivo | Decisión |
-|---|---|---|---|
-| **Core Domain** | El que diferencia el negocio y su ventaja competitiva. | Muy alto | Invertir más: mejor gente, software propio y robusto |
-| **Supporting Subdomain** | Necesario pero no diferencial. | Medio | Construir simple, posibles third-party |
-| **Generic Subdomain** | Funciones comunes a cualquier empresa (email, auth, logs). | Bajo | Comprar, no construir (Cognito, SES, herramientas) |
+| Tipo                     | Definición                                                 | Valor competitivo | Decisión                                             |
+| ------------------------ | ---------------------------------------------------------- | ----------------- | ---------------------------------------------------- |
+| **Core Domain**          | El que diferencia el negocio y su ventaja competitiva.     | Muy alto          | Invertir más: mejor gente, software propio y robusto |
+| **Supporting Subdomain** | Necesario pero no diferencial.                             | Medio             | Construir simple, posibles third-party               |
+| **Generic Subdomain**    | Funciones comunes a cualquier empresa (email, auth, logs). | Bajo              | Comprar, no construir (Cognito, SES, herramientas)   |
 
 **Anti-patrón:** confundir "complejo" con "core". Un generador de PDF de facturas es técnicamente complejo pero casi siempre un subdominio genérico (utilidad). Confundir esto desperdicia tiempo donde no hay diferenciación.
 
 **Ejemplo plataforma salud:**
+
 - Core: algoritmo de matching de diagnóstico (IP protegida).
 - Supporting: portal paciente (funcional estándar).
 - Generic: notificaciones de email, infraestructura de logs.
@@ -149,9 +152,11 @@ No vocabulary can be shared between devs y PO without ambiguity.
 Dentro de cada bounded context, DDD táctico propone objetos de dominio:
 
 #### Entity
+
 Objeto con **identidad persistente** que se mantiene a lo largo del tiempo y del estado. `Customer` (el cliente significa algo durable), mientras que `Address` puede ser reemplazada de una vez (quizás value object).
 
 #### Value Object
+
 Definido **sólo por sus atributos**, sin identidad única. Inmutable:
 
 ```typescript
@@ -163,6 +168,7 @@ Coordinates(40.7128, -74.0060)
 Se usan de manera extensa en atributos que describen a entidades, no requieren identidad y su igualdad se valora por contenido.
 
 #### Aggregate y Aggregate Root
+
 Un aggregate es un **clúster de entidades y value objects tratados como una unidad de consistencia**. Dentro de un aggregate:
 
 - Se garantizan **invariantes de negocio** (reglas que deben cumplirse en todo momento).
@@ -179,6 +185,7 @@ class Order {                       // Aggregate Root
 **Regla:** un repositorio por aggregate. Persistencia = persistir el aggregate como unidad única.
 
 #### Domain Services
+
 Lógica de negocio que **no pertenece naturalmente** a una sola entidad o value object (suele ser un proceso inter-aggregate).
 
 ```typescript
@@ -188,14 +195,21 @@ class DeliveryCostCalculator {        // Domain Service
 ```
 
 #### Application Services
-Capa fina de **orquestación** que coordina *domain services* y *entities* y las fronte con los puertos. No contiene reglas de negocio, sólo las decisions and coordination y transacciones.
+
+Capa fina de **orquestación** que coordina _domain services_ y _entities_ y las fronte con los puertos. No contiene reglas de negocio, sólo las decisions and coordination y transacciones.
 
 #### Domain Events
+
 Registro (evento) de que **algo relevante pasó** dentro del dominio, como hecho inmutable.
 
 ```typescript
 class OrderCompleted extends DomainEvent {
-  constructor(public orderId: string, public at: Date) { super(); }
+  constructor(
+    public orderId: string,
+    public at: Date,
+  ) {
+    super();
+  }
 }
 ```
 
@@ -206,6 +220,7 @@ class OrderCompleted extends DomainEvent {
 ## Diseño de límites de servicio: cómo dividir un sistema
 
 **No se divide por tecnología ni por capa**, sino por:
+
 1. **Capacidad de negocio.**
 2. **Límites de dominio que descubre DDD.**
 3. **Ownership del equipo (Conway's Law).**
@@ -230,16 +245,16 @@ Cada servicio mapea a una **capacidad de negocio** ("procesar devoluciones", "ge
 
 ### Conway's Law
 
-> *"Las organizaciones que diseñan sistemas están destinadas a producir disisqueña copia de su propia estructura de comunicación."*
+> _"Las organizaciones que diseñan sistemas están destinadas a producir disisqueña copia de su propia estructura de comunicación."_
 
-Implicación: si tu arquitectura no refleja la estructura de equipos, terminarás con servicios de nadie, límites ambiguos y culpas cruzadas. **Solución:** reorganizar equipos para alinear la arquitectura deseada (*Inverse Conway Maneuver*).
+Implicación: si tu arquitectura no refleja la estructura de equipos, terminarás con servicios de nadie, límites ambiguos y culpas cruzadas. **Solución:** reorganizar equipos para alinear la arquitectura deseada (_Inverse Conway Maneuver_).
 
 ### Team Topologies (Skelton & Pais)
 
 Marco moderno: 4 tipos de equipos:
 
 1. **Stream-Aligned Teams:** alineados a un flujo de valor de negocio ("Optimización de conversión", "Pago"). Entregan end-to-end.
-2. **Platform Teams:** proveen servicios internos *self-service* a los equipos stream (cloud platform, seguridad, tooling). Reducen carga cognitiva.
+2. **Platform Teams:** proveen servicios internos _self-service_ a los equipos stream (cloud platform, seguridad, tooling). Reducen carga cognitiva.
 3. **Enabling Teams:** ayudan a los Stream-Aligned a superar obstáculos/aprender ("SRE coaches". Naturaleza temporal).
 4. **Complicated-Subsystem Teams:** donde hace falta prof. técnica específica (visión por computador, entrenamiento). Dueños especialistas.
 
@@ -314,27 +329,27 @@ flowchart TD
 
 Aparece cuando hace falta una respuesta en plazo de llamada. **Pero introduce acoplamiento temporal**: si el downstream cae o responde lento, el llamador se degrada igual. Hay que defenderer con timeouts, retries y circuit breakers.
 
-| Protocolo | Cuándo usar | Pros | Contras |
-|---|---|---|---|
-| **REST/JSON** | Por defecto para APIs y muy común (versión) | Simple, estándar, cacheable, legible | Over-fetching, tipado débil |
-| **gRPC** | Comunicación interna de blog de alto rendimiento | Tipado fuerte, eficiente (Protobuf, binario, HTTP/2 streaming) | Curva, debugging menos maduro, conversaje de datos más limitado |
-| **GraphQL interno** | Agregación UI compleja (con BFF) | Consulta precisa, sin over/under-fetching | Complejidad de resolver, abuso fácil—Rolido de Módulo 09 |
+| Protocolo           | Cuándo usar                                      | Pros                                                           | Contras                                                         |
+| ------------------- | ------------------------------------------------ | -------------------------------------------------------------- | --------------------------------------------------------------- |
+| **REST/JSON**       | Por defecto para APIs y muy común (versión)      | Simple, estándar, cacheable, legible                           | Over-fetching, tipado débil                                     |
+| **gRPC**            | Comunicación interna de blog de alto rendimiento | Tipado fuerte, eficiente (Protobuf, binario, HTTP/2 streaming) | Curva, debugging menos maduro, conversaje de datos más limitado |
+| **GraphQL interno** | Agregación UI compleja (con BFF)                 | Consulta precisa, sin over/under-fetching                      | Complejidad de resolver, abuso fácil—Rolido de Módulo 09        |
 
 ### Comunicación asíncrona (mensajería)
 
 Desacopla en tiempo y espacio. Especial a la resiliencia (el productor no espera al consumidor).
 
-- **Colas (Queues):** punto a punto. Un mensaje lo procesa *uno solo* consumidor. Ideal para workers/jobs.
+- **Colas (Queues):** punto a punto. Un mensaje lo procesa _uno solo_ consumidor. Ideal para workers/jobs.
 - **Topics de Pub-Sub:** una mensaje se replica a muchos suscriptores. Para de fan-out, notificationes, event sourcing.
 
 ### Tecnologías relacionadas en AWS
 
-| Servicio | Rol | Cuándo |
-|---|---|---|
-| **Amazon SQS** | Cola de mensajes, at-least-once, DLQ, alta escala | Desacoplar jobs/heavy workloads, pipelines |
-| **Amazon SNS** | Pub/Sub / fan-out | Alertas, notificaciones, disparar procesos independientes |
-| **Amazon EventBridge** | EventBus serverless con esquemas y reglas | Routing de domain events, integración SaaS |
-| **Apache Kafka** | Event store distribuido (streaming), replayable | Event Sourcing, big data pipelines |
+| Servicio               | Rol                                               | Cuándo                                                    |
+| ---------------------- | ------------------------------------------------- | --------------------------------------------------------- |
+| **Amazon SQS**         | Cola de mensajes, at-least-once, DLQ, alta escala | Desacoplar jobs/heavy workloads, pipelines                |
+| **Amazon SNS**         | Pub/Sub / fan-out                                 | Alertas, notificaciones, disparar procesos independientes |
+| **Amazon EventBridge** | EventBus serverless con esquemas y reglas         | Routing de domain events, integración SaaS                |
+| **Apache Kafka**       | Event store distribuido (streaming), replayable   | Event Sourcing, big data pipelines                        |
 
 **Regla de selección:** SQS para trabajo transaccional pesado (pérdida es dañina); SNS para fan-out liviano; EventBridge cuando el esquema de eventos evoluciona y adelanto Schema Registry; Kafka para massive streams y procesamiento de estado.
 
@@ -436,21 +451,26 @@ Más allá de la definición del [Glosario](00-Glosario.md), en microservicios:
 Patrones definidos ya en el [Módulo 01](01-Arquitectura-de-Software-Moderna.md) y el [Glosario](00-Glosario.md); aquí se integran con el contexto del Módulo 02:
 
 ### API Gateway
+
 Punto de entrada único: **auth**, routing, rate limiting, monitoreo. Evita exponer cada servicio. Traducción de protocolos (HTTP → gRPC interno). En AWS: Amazon API Gateway (REST/HTTP/WebSocket, caching, throttling, usage plans).
 
 ### Backend For Frontend (BFF)
+
 Variante en que tienes un gateway **por tipo de cliente** (Web, iOS, Android), propiedad del equipo de cada cliente. Evita que "API genérica" sobrecargue dispositivos ligeros y permite policies de cache específicas por latencia.
 
 ### Service Discovery
+
 Cómo se hallan las redes (indicios IP:puerto) dinámicas.
 
 - **Client-side:** el cliente consulta el registry (Consul, Zookeeper) y conecta. Control fino, pero más acoplamiento del cliente.
 - **Server-side:** un load balancer encienda con datos del registry (ALB + Target Groups, Cloud Map). El cliente simple, pero una llama más.
 
 ### Circuit Breaker
+
 Ante umbral de errores, **falla rápido** (Open) en lugar de estarle. Estados: Closed/Open/Half-Open. Implementate en bibliotecas de resiliencia (Resilience4j, Polly) o en mesh (Envoy/Istio). Monitorea del `CircuitOpenRate`.
 
 ### Retry Pattern
+
 Solo errores transitorios (net, 5xx, timeouts) con **exponential backoff + jitter**. Fórmula:
 
 `Wait = min(MaxWait, base * 2^attempt + jitter)`
@@ -458,21 +478,27 @@ Solo errores transitorios (net, 5xx, timeouts) con **exponential backoff + jitte
 **Nunca retrinjes 4xx** (son errores del cliente, no transitorios). Y combinalo con circuit breaker (no peer a la parte de su caídas).
 
 ### Bulkhead
+
 Aislamiento de recursos para que el fallo de un componente no agote el pool compartido. Como compartimentos de un barco: pool de threads separado por pago vs reporte, limites de concurrency reservados por Lambda, colas separadas trabajo crítico vs fondo.
 
 ### Rate Limiting
+
 Evitar el abuso two thirds de las interpretaciones (Cliente/API abierta).
+
 - **Token Bucket:** ráfagas permitidas (buen UX).
 - **Leaky Bucket:** tasa constante (buen para backend).
 - **Fixed window:** simple, burst boundary.
 - **Sliding window log:** preciso, heavy memoria.
-Módulo 09 lo verá más: rate limiting de la capa y aplicación.
+  Módulo 09 lo verá más: rate limiting de la capa y aplicación.
 
 ### Caching
+
 Reducir carga de base de datos acercando datos calientes. Hay clientes, CDN, service (Redis/ElastiCache). Patrones de cache (Cache-Aside, Write-Through, etc) en el Módulo 10. La clave: **invalidación** (TTL y eventos) — por relies no reflex el problema.
 
 ### CQRS y Event Sourcing
+
 Reconocer aquí su lugar como **patrones de microservicios**:
+
 - **CQRS:** separar el modelo de **escritura** (estricto, dominio) del **lectura** (denormalizado, eventos para sincronizar). Módulo 03.
 - **Event Sourcing:** estado derivado de un log de eventos inmutable, con auditoría y replay. Módulo 03 y 05.
 
@@ -501,6 +527,7 @@ En microservicios, cada hop puede delegar/revalidar con tokens.
 Token compacto firmado `Header.Payload.Signature` que propagar el estado de autenticación sin sesiones pegajosas. Claims: `iss`, `sub`, `aud`, `exp`, `iat`, `scp`.
 
 **Buenas prácticas (Módulo 08 profundo):**
+
 1. Valida la firma con cadena JWKS rotable.
 2. Strict `exp`/`aud`/`iat`.
 3. Tokens de vida cortes (ej: 15min) + **refresh token**.
@@ -518,13 +545,15 @@ Cómo demuestra el servicio A su identidad ante B:
 ### Secrets Management
 
 Nunca secrets en código/git. Usar:
+
 - AWS Secrets Manager / Parameter Store.
 - HashiCorp Vault.
-Se inyectan en runtime via roles (IRSA en EKS, Lambda Execution Role, ECS Task Role), con rotación automática.
+  Se inyectan en runtime via roles (IRSA en EKS, Lambda Execution Role, ECS Task Role), con rotación automática.
 
 ### Zero Trust Architecture
 
-*"Never Trust; Always Verify".* La microservicios eliminan la segmentación de confianza implícita dentro de la red. Implícitos:
+_"Never Trust; Always Verify"._ La microservicios eliminan la segmentación de confianza implícita dentro de la red. Implícitos:
+
 - **Service identity** (mTLS).
 - **Policy enforcement** (sidecars/Envoy, authorization de mesh).
 - **Least privilege** (solo adjunta a sus datos).
@@ -537,26 +566,33 @@ Se inyectan en runtime via roles (IRSA en EKS, Lambda Execution Role, ECS Task R
 En un microservicio la observabilidad es una disciplina de operación imprescindible. Detalle en **Módulo 07**. Aquí el mapa y quién.
 
 ### Logging centralizado
+
 Agregar logs de funentes efímeras/containers en un sistema, consultable. (ELK, Splunk, Datadog, CloudWatch Logs Insights).
+
 - JSON estructurado.
 - **Correlation ID por request**.
 - Contextes (env, versión, region).
 - **Scrub de PII** antes de guardar.
 
 ### Distributed Tracing
+
 Seguir una petición entre N hops. Objetos: **trace** (árbol de spans), `trace_id`, `span_id`, `parent_id`, start/end. Herramientas: **AWS X-Ray**, **OpenTelemetry** (estándar), **Jaeger/Zipkin**. Identifica el cuello de latencia por servicio.
 
 ### Correlation IDs
+
 ID único generado en el edge es heartbeat- pasado en header `X-Correlation-ID`. Cada log y span lo occlusion. Cuando un usuario nota "error 123": buscas por `X-Correlation-ID`, vas a la traza, ves la query exacta. Indispensable.
 
 ### Métricas
+
 Tipos: counter (total de eventos), gauge (+ gsnapshot), histogram (distribución de latencia), summary (percentiles p99).
 **Golden signals** (SRE): latencia, errores, tráfico, saturación.
 
 ### Alerting
+
 Alertes acciones en **SLO**!!!!! No en rendimiento bruto. Respuesta: error budget consumido → page; else dashboard. Siempre con runbooks ligados.
 
 ### SLI / SLO / SLA
+
 - **SLI** = indicador medido ("99.95% disponibles 30 días").
 - **SLO** = objetivo ("apuntamos 99.9%").
 - **SLA** = contrato con consecuencias ("si <99.5%, creditos").
@@ -568,37 +604,47 @@ En microservicios: **SLO internos** agresivos (cultura de calidad), **SLA extern
 ## Casos reales
 
 ### Caso 1: De monolitito modular a servicios (startup)
+
 Un SaaS de reservas con 5 devs nació modular monolith. Creció; cuando el trán de notificaciones requería **escalar independiente bajo peaks**, se extrajo a un microservicio real SQS+Fan-out (Módulo 04). El **payment** y **scheduling** se mantuvieron monotónico (consistencia ACID críta). Decición guiada por dolor real, no moda → lo correcto.
 
 ### Caso 2: Fintech alta con microservices + DDD
+
 Una plataforma con patrones en bounded contexts (Payment, Fraud Detection, Compliance, Onboarding) y core (servicios) bien desacoplados. En el **dominio Payment**, DDD táctico: `Payment` aggregate root u Origen, `Money` value object, **Saga orquestada con Step Functions** para reembolsos. CQRS para lecturas full denormalizadas. Fitness functions → reglas en CI/CD (violación de dependencia o latency breack) bloquea el merge. Resultado: deplooys del payment-service diario sin coordinación global.
 
 ### Caso 3: Migración de monolito legacy (strangler)
-Empresa con monolito PHP legacy y pedidos centralizados. Migración de **strangler fig**: nueva microservice de `Catalog` con own PostreSQL; el resto del monolito hizo POST a la nueva API al cliente. Cuando el flujo de pedidos se volvió independiente, se extrajo `Order` con saga (Order Created) y inventory. Lección: no se montaron anaconda microservices, se **primero bounded contexts limpieza y de CSC y ya a servicios extracciones caso a caso.
+
+Empresa con monolito PHP legacy y pedidos centralizados. Migración de **strangler fig**: nueva microservice de `Catalog` con own PostreSQL; el resto del monolito hizo POST a la nueva API al cliente. Cuando el flujo de pedidos se volvió independiente, se extrajo `Order` con saga (Order Created) y inventory. Lección: no se montaron anaconda microservices, se \*\*primero bounded contexts limpieza y de CSC y ya a servicios extracciones caso a caso.
 
 ---
 
 ## Laboratorio
 
 ### Lab 1: División de límites
+
 Toma el food-delivery que previamos en Módulo 01:
+
 1. Mapea el **bounded contexts**.
 2. Escribe un **Ubiquitous Language** definición de 5+ términos (orders, kitchen, delivery, idem...).
 3. Asigna cada servicio a un rol de **Team Topologies** y decide si su granularidad es `service` o `module`.
 
 ### Lab 2: Matriz de comunicación
+
 Dibuja el diagrama de grafo de servicios entre llamados **síncronos** vs **asíncronos**. Marca en dónde un **drive breaker**, **outbox** o **legacy queue** es obligatorio.
 
 ### Lab 3: Saga Orquestada
+
 Inventa el flujo Order Fulfillment. Escribe el **pseudo-código del orquestador** que maneja compensaciones si PayoutService muere a mediata de la transacción.
 
 ### Lab 4: Observabilidad audit
+
 Consulta de la estructura logografía ESE que "app estandará". Dónde inyecta **correlation ID** y **JSON structured logging**? Escribe el esquema del log JSON resultante.
 
 ### Lab 5: Threat model
+
 Identifica vectores de ataque del **Identity Service**. Seleccione los flujos OAuth para first-party vs third-party apps.
 
 ### Lab 6: Contract test de micro-servicio
+
 Con Pact, crea un test que falle: `OrderService` espera `items.priceCents` en la OrderCreated; repasa que `KitchenService` envía `unitPrice`. Muestra cómo el conflicto rompe el pipeline antes del merge.
 
 ---
@@ -607,9 +653,9 @@ Con Pact, crea un test que falle: `OrderService` espera `items.priceCents` en la
 
 1. **¿Diferencia entre SOA y Microservices?**
 
-   **Orientación:** Buscan que distingas *ownership* y *granularidad* por encima del ESB. Evita decir que son lo mismo.
+   **Orientación:** Buscan que distingas _ownership_ y _granularidad_ por encima del ESB. Evita decir que son lo mismo.
 
-   **Respuesta de un senior:** "SOA insistía en la separación de responsabilidades *empresariales* y casi siempre aterrizaba en un ESB que centralizaba la integración: ese bus se convertía en el monolito oculto, el punto único de fallo y el cuello de botella. Microservices son un refinamiento: servicios pequeños, autónomos, con *ownership de sus datos y de su despliegue*, que se comunican por API/eventos sin intermediario pesado. La diferencia práctica que me importa es el ownership: en SOA reutilizabas servicios como cajas compartidas; en microservicios cada equipo es dueño de extremo a extremo y no comparte base de datos. La granularidad, además, se decide por bounded context, no por un bus."
+   **Respuesta de un senior:** "SOA insistía en la separación de responsabilidades _empresariales_ y casi siempre aterrizaba en un ESB que centralizaba la integración: ese bus se convertía en el monolito oculto, el punto único de fallo y el cuello de botella. Microservices son un refinamiento: servicios pequeños, autónomos, con _ownership de sus datos y de su despliegue_, que se comunican por API/eventos sin intermediario pesado. La diferencia práctica que me importa es el ownership: en SOA reutilizabas servicios como cajas compartidas; en microservicios cada equipo es dueño de extremo a extremo y no comparte base de datos. La granularidad, además, se decide por bounded context, no por un bus."
 
 2. **¿Cuándo NO usarías microservicios?**
 
@@ -621,7 +667,7 @@ Con Pact, crea un test que falle: `OrderService` espera `items.priceCents` en la
 
    **Orientación:** Demuestra que es el corazón de DDD y cómo define límites de modelo y de servicio. Menciona Shared Kernel y mapeo de agregados.
 
-   **Respuesta de un senior:** "Un Bounded Context es la frontera donde un término tiene un significado único y no ambiguo. 'Pedido' en el contexto de *comercio* significa una cosa; en el de *logística* significa otra. Cada contexto tiene su propio modelo, su propio lenguaje ubicuo y su propia base de datos: no lo compartes con otros contextos. Esto es lo que permite que dos equipos usen 'producto' con significados distintos sin pelearse. Dentro de un contexto trabajas con Aggregates; entre contextos definimos contracts de integración, a veces con un Shared Kernel (un conjunto reducido compartido y versionado). El Bounded Context es, en la práctica, el candidato natural a servicio."
+   **Respuesta de un senior:** "Un Bounded Context es la frontera donde un término tiene un significado único y no ambiguo. 'Pedido' en el contexto de _comercio_ significa una cosa; en el de _logística_ significa otra. Cada contexto tiene su propio modelo, su propio lenguaje ubicuo y su propia base de datos: no lo compartes con otros contextos. Esto es lo que permite que dos equipos usen 'producto' con significados distintos sin pelearse. Dentro de un contexto trabajas con Aggregates; entre contextos definimos contracts de integración, a veces con un Shared Kernel (un conjunto reducido compartido y versionado). El Bounded Context es, en la práctica, el candidato natural a servicio."
 
 4. **¿Conoces la Ley de Conway? ¿Cómo la uses?**
 
@@ -633,13 +679,13 @@ Con Pact, crea un test que falle: `OrderService` espera `items.priceCents` en la
 
    **Orientación:** Evita 2PC en microservicios. Esperan Saga (orchestrated vs choreographed), Outbox y honestidad sobre consistencia.
 
-   **Respuesta de un senior:** "En un monolith usas una transacción ACID local. En microservicios, el ACID multi-servicio es inviable y pagas con disponibilidad; lo reemplazo por consistencia eventual orquestada. Uso *Saga*: una secuencia de pasos locales con una compensación por cada uno. Distingo *orchestrated* —un coordinador explícito que sabe la secuencia y gestiona estados (más fácil de supervisar)— y *choreographed* —cada servicio reacciona a eventos, más desacoplado pero más difícil de seguir. Añado *Outbox* para publicar los eventos de forma atómica con el cambio de base de datos y evitar perderlos. El trade-off de fondo es que admito ventanas de inconsistencia y las documento: nunca 'declaro' como si fuera ACID; defino compensaciones de negocio para cada paso."
+   **Respuesta de un senior:** "En un monolith usas una transacción ACID local. En microservicios, el ACID multi-servicio es inviable y pagas con disponibilidad; lo reemplazo por consistencia eventual orquestada. Uso _Saga_: una secuencia de pasos locales con una compensación por cada uno. Distingo _orchestrated_ —un coordinador explícito que sabe la secuencia y gestiona estados (más fácil de supervisar)— y _choreographed_ —cada servicio reacciona a eventos, más desacoplado pero más difícil de seguir. Añado _Outbox_ para publicar los eventos de forma atómica con el cambio de base de datos y evitar perderlos. El trade-off de fondo es que admito ventanas de inconsistencia y las documento: nunca 'declaro' como si fuera ACID; defino compensaciones de negocio para cada paso."
 
 6. **Diseña el sistema de dispatch de Uber.**
 
    **Orientación:** Un clásico de system design. Buscan escala, geo-indexé y eventos. Muestra cómo particionas el problema.
 
-   **Respuesta de un senior:** "Lo modelaría por eventos a escala. Mover los conductores y rider actualizando su posición a alta frecuencia: cada rider pide un viaje, que es un evento, y su posición se guarda en un geo-index (Redis Geospatial o un servicio de matching). Separaría responsabilidades: un servicio de *location pool* que mantiene y publica posiciones, y un servicio de *matching* que, ante un event 'trip request', encuentra los conductores más cercanos en el área, les ofrece el viaje (con timeout), y emite un event 'trip assigned'. Cada asignación genera una cadena de eventos de estado del viaje. El matching necesita baja latencia, así que lo mantengo cerca del geo-index en la región del usuario; el resto del procesamiento (precios, cobro) puede ser asíncrono. El cuello de botella son las zonas calientes (centro de la ciudad): hay que particionar el espacio geográfico para no saturar un nodo."
+   **Respuesta de un senior:** "Lo modelaría por eventos a escala. Mover los conductores y rider actualizando su posición a alta frecuencia: cada rider pide un viaje, que es un evento, y su posición se guarda en un geo-index (Redis Geospatial o un servicio de matching). Separaría responsabilidades: un servicio de _location pool_ que mantiene y publica posiciones, y un servicio de _matching_ que, ante un event 'trip request', encuentra los conductores más cercanos en el área, les ofrece el viaje (con timeout), y emite un event 'trip assigned'. Cada asignación genera una cadena de eventos de estado del viaje. El matching necesita baja latencia, así que lo mantengo cerca del geo-index en la región del usuario; el resto del procesamiento (precios, cobro) puede ser asíncrono. El cuello de botella son las zonas calientes (centro de la ciudad): hay que particionar el espacio geográfico para no saturar un nodo."
 
 7. **Critica: base de datos compartida entre 3 servicios.**
 
@@ -651,19 +697,19 @@ Con Pact, crea un test que falle: `OrderService` espera `items.priceCents` en la
 
    **Orientación:** Buscan que no idealices la orquestación. Compensaciones complejas, races de estado y el orquestador como bottleneck.
 
-   **Respuesta de un senior:** "El orquestador centraliza la lógica, lo que es una ventaja de visibilidad, pero también su gran desventaja. Primero, introduce un *punto único de acoplamiento*: conoce todos los pasos y todos los contratos; si crece, se convierte en el servicio que nadie quiere tocar. Segundo, el orquestador puede volverse un *bottleneck* y una single point of failure para el flujo. Tercero, las *compensaciones* son complejas de mantener: cada paso debe tener su inversa, y los pasos intermedios que ya se completaron deben poderse deshacer de forma segura incluso si el orquestador se cae a mitad. Y cuarto, hay *race conditions* de estado: el coordinador debe tolerar timeouts, respuestas tardías y duplicados sin bloquearse. Por eso en flujos simples prefiero coreografía, y reservo orquestación para flujos donde necesito supervisar cada paso."
+   **Respuesta de un senior:** "El orquestador centraliza la lógica, lo que es una ventaja de visibilidad, pero también su gran desventaja. Primero, introduce un _punto único de acoplamiento_: conoce todos los pasos y todos los contratos; si crece, se convierte en el servicio que nadie quiere tocar. Segundo, el orquestador puede volverse un _bottleneck_ y una single point of failure para el flujo. Tercero, las _compensaciones_ son complejas de mantener: cada paso debe tener su inversa, y los pasos intermedios que ya se completaron deben poderse deshacer de forma segura incluso si el orquestador se cae a mitad. Y cuarto, hay _race conditions_ de estado: el coordinador debe tolerar timeouts, respuestas tardías y duplicados sin bloquearse. Por eso en flujos simples prefiero coreografía, y reservo orquestación para flujos donde necesito supervisar cada paso."
 
 9. **¿Cómo aseguras la comunicación entre servicios?**
 
    **Orientación:** Esperan mTLS + OAuth client credentials y concepto de Zero Trust, no solo "token en el header".
 
-   **Respuesta de un senior:** "Parto de Zero Trust: nada dentro de la red es de fiar por defecto. Autentico cada llamada servicio-a-servicio con *mTLS* (certificados de cliente), para garantizar que el emisor es quien dice ser a nivel de transporte, y autorizo con *OAuth2 Client Credentials*: cada servicio tiene credenciales propias y pide un token con scopes limitados. No confío en la red, así que cifro en tránsito (TLS) entre todos los peers y aplico autorización mínima. En AWS, por ejemplo, uso IAM service-linked roles o un service mesh que gestiona mTLS y policy por workload, con network policies que limitan quién puede hablar con quién. Además, end-to-end siempre logs todo con trace_id para auditar el flujo."
+   **Respuesta de un senior:** "Parto de Zero Trust: nada dentro de la red es de fiar por defecto. Autentico cada llamada servicio-a-servicio con _mTLS_ (certificados de cliente), para garantizar que el emisor es quien dice ser a nivel de transporte, y autorizo con _OAuth2 Client Credentials_: cada servicio tiene credenciales propias y pide un token con scopes limitados. No confío en la red, así que cifro en tránsito (TLS) entre todos los peers y aplico autorización mínima. En AWS, por ejemplo, uso IAM service-linked roles o un service mesh que gestiona mTLS y policy por workload, con network policies que limitan quién puede hablar con quién. Además, end-to-end siempre logs todo con trace_id para auditar el flujo."
 
 10. **Define SLI, SLO y SLA.**
 
     **Orientación:** Debes separar el indicador, el objetivo y el contrato, y la relación con el error budget.
 
-    **Respuesta de un senior:** "En el modelo SRE: un *SLI* es el indicador real que mido, p. ej. la fracción de requests que responden en menos de 300 ms con status no-5xx. Un *SLO* es el objetivo que me pongo con el equipo y el negocio: 'el 99.9% de las requests deben cumplir ese SLI en una ventana de 30 días'. El SLO me da un *error budget*: si en la ventana voy al 99.5%, he gastado el 0.4% de presupuesto de error restante, y eso decide cuándo freno releases para estabilizar. Un *SLA* es el contrato *legal* con el cliente, casi siempre más alto que mi SLO interno, porque si el SLA es mayor que el SLO, un incumplimiento del SLA ocurriría mientras todavía estoy 'a tiempo' según mi presupuesto. El SLO es mi herramienta de ingeniería para balancear velocidad y reliability."
+    **Respuesta de un senior:** "En el modelo SRE: un _SLI_ es el indicador real que mido, p. ej. la fracción de requests que responden en menos de 300 ms con status no-5xx. Un _SLO_ es el objetivo que me pongo con el equipo y el negocio: 'el 99.9% de las requests deben cumplir ese SLI en una ventana de 30 días'. El SLO me da un _error budget_: si en la ventana voy al 99.5%, he gastado el 0.4% de presupuesto de error restante, y eso decide cuándo freno releases para estabilizar. Un _SLA_ es el contrato _legal_ con el cliente, casi siempre más alto que mi SLO interno, porque si el SLA es mayor que el SLO, un incumplimiento del SLA ocurriría mientras todavía estoy 'a tiempo' según mi presupuesto. El SLO es mi herramienta de ingeniería para balancear velocidad y reliability."
 
 ---
 
@@ -700,4 +746,4 @@ Con Pact, crea un test que falle: `OrderService` espera `items.priceCents` en la
 
 ---
 
-*Más profundidad operativa: **Apéndice A** de este módulo cubre mensajería, agregados avanzados, contract testing, config global, service mesh, DR planeado y ejercicios de escenarios. Los de consistencia distribuida (Saga, Outbox, CQRS, Event Sourcing) y el bus (EventBridge, SQS/SNS, Kafka) se desarrollan en el **Módulo 03**. La seguridad se completa en el **Módulo 08** y la observabilidad es tierra hasta el **Módulo 07**.*
+> _Más profundidad operativa: [**Apéndice A**](appends/02-Microservicios-y-DDD-Apendice-A.md) de este módulo cubre mensajería, agregados avanzados, contract testing, config global, service mesh, DR planeado y ejercicios de escenarios. Los de consistencia distribuida (Saga, Outbox, CQRS, Event Sourcing) y el bus (EventBridge, SQS/SNS, Kafka) se desarrollan en el [**Módulo 03**](03-Event-Driven-Architecture.md). La observabilidad es tierra hasta el [**Módulo 07**](07-Observabilidad.md) y la seguridad se completa en el [**Módulo 08**](08-Seguridad.md)._

@@ -317,65 +317,65 @@ Inyección **controlada** de fallos en producción para validar las hipótesis d
 
 ## Entrevistas
 
-**1. "¿Cuál es la diferencia entre escalabilidad vertical y horizontal? ¿Cuál elegirías y cuándo?"**
+1. **"¿Cuál es la diferencia entre escalabilidad vertical y horizontal? ¿Cuál elegirías y cuándo?"**
 
-**Orientación:** espera que distinga _scale up_ vs _scale out_, reconozca el prerequisito del horizontal (stateless) y aplique la regla de no adelantar complejidad.
+   **Orientación:** espera que distinga _scale up_ vs _scale out_, reconozca el prerequisito del horizontal (stateless) y aplique la regla de no adelantar complejidad.
 
-**Respuesta de un senior:** vertical agrega recursos a la misma máquina (tope físico, costo superlineal, un solo punto de fallo); horizontal agrega máquinas detrás de un load balancer (sin tope práctico, alta disponibilidad inherente) pero exige **stateless** o estado externalizado (Redis, BD). Uso vertical donde es barato y suficiente — arranque, la BD primaria con carga contenida — y horizontal como default para app stateless y reads (auto scaling). Y evito adelantar complejidad: muchas veces scale-up + read replicas aguantan dos años más que un sharding prematuro, que introduce joins cross-shard y rebalanceo operativo.
+   **Respuesta de un senior:** vertical agrega recursos a la misma máquina (tope físico, costo superlineal, un solo punto de fallo); horizontal agrega máquinas detrás de un load balancer (sin tope práctico, alta disponibilidad inherente) pero exige **stateless** o estado externalizado (Redis, BD). Uso vertical donde es barato y suficiente — arranque, la BD primaria con carga contenida — y horizontal como default para app stateless y reads (auto scaling). Y evito adelantar complejidad: muchas veces scale-up + read replicas aguantan dos años más que un sharding prematuro, que introduce joins cross-shard y rebalanceo operativo.
 
-**2. "¿Cómo escalarías una API para pasar de miles a millones de usuarios?"**
+2. **"¿Cómo escalarías una API para pasar de miles a millones de usuarios?"**
 
-**Orientación:** quiere una **secuencia** de decisiones ordenada por retorno (la "escalera"), no un dump de herramientas. Puntos fuertes: stateless, caché, replicas, colas, y recién al final sharding.
+   **Orientación:** quiere una **secuencia** de decisiones ordenada por retorno (la "escalera"), no un dump de herramientas. Puntos fuertes: stateless, caché, replicas, colas, y recién al final sharding.
 
-**Respuesta de un senior:** subo la escalera en orden de retorno: (1) **stateless app** detrás de un load balancer con health checks y connection draining — a partir de aquí escalo horizontalmente; (2) **caché multinivel** — CDN para estáticos, Redis cache-aside para los reads calientes; (3) **read replicas** para separar las lecturas del primario (con read-your-writes para queries que deben ver la escritura); (4) **colas + workers** para sacar del request path lo que no necesita respuesta síncrona; (5) **autoscaling por latencia** con cooldown; y recién cuando las escrituras o el volumen de datos lo exijan, (6) **sharding** (detalle en Módulo 05). El orden importa: el sharding es el último recurso porque es el de mayor complejidad operativa.
+   **Respuesta de un senior:** subo la escalera en orden de retorno: (1) **stateless app** detrás de un load balancer con health checks y connection draining — a partir de aquí escalo horizontalmente; (2) **caché multinivel** — CDN para estáticos, Redis cache-aside para los reads calientes; (3) **read replicas** para separar las lecturas del primario (con read-your-writes para queries que deben ver la escritura); (4) **colas + workers** para sacar del request path lo que no necesita respuesta síncrona; (5) **autoscaling por latencia** con cooldown; y recién cuando las escrituras o el volumen de datos lo exijan, (6) **sharding** (detalle en Módulo 05). El orden importa: el sharding es el último recurso porque es el de mayor complejidad operativa.
 
-**3. "Explica cómo funciona un circuit breaker y por qué lo usarías."**
+3. **"Explica cómo funciona un circuit breaker y por qué lo usarías."**
 
-**Orientación:** busca la mecánica de los 3 estados, la idea de _fail fast_, y que lo coordine con retries/timeouts (no como reemplazo).
+   **Orientación:** busca la mecánica de los 3 estados, la idea de _fail fast_, y que lo coordine con retries/timeouts (no como reemplazo).
 
-**Respuesta de un senior:** es un breaker eléctrico para software. En **Closed** dejo pasar todo y cuento los fallos en una ventana deslizante; al superar el umbral (ej. 50% fallos) pasa a **Open**: las llamadas a la dependencia fallan **inmediatamente** sin tocarla, con un fallback (dato cacheado o respuesta degradada). Tras un reset timeout pasa a **Half-Open**, deja pasar una prueba limitada, y según el resultado vuelve a Closed o a Open. El punto clave: _continuar llamando a un servicio enfermo es peor que fallar rápido_ — consume threads, memory y connection pools, y agota los recursos del caller. No reemplaza a retries/timeouts: retries para transitorios, breaker para crónicos, y timeouts para que nada se cuelgue.
+   **Respuesta de un senior:** es un breaker eléctrico para software. En **Closed** dejo pasar todo y cuento los fallos en una ventana deslizante; al superar el umbral (ej. 50% fallos) pasa a **Open**: las llamadas a la dependencia fallan **inmediatamente** sin tocarla, con un fallback (dato cacheado o respuesta degradada). Tras un reset timeout pasa a **Half-Open**, deja pasar una prueba limitada, y según el resultado vuelve a Closed o a Open. El punto clave: _continuar llamando a un servicio enfermo es peor que fallar rápido_ — consume threads, memory y connection pools, y agota los recursos del caller. No reemplaza a retries/timeouts: retries para transitorios, breaker para crónicos, y timeouts para que nada se cuelgue.
 
-**4. "¿Por qué los retries pueden ser peligrosos y cómo los haces seguros?"**
+4. **"¿Por qué los retries pueden ser peligrosos y cómo los haces seguros?"**
 
-**Orientación:** quiere que el candidato conozca el _retry storm_ (thundering herd), el _jitter_, y la precondición de idempotencia.
+   **Orientación:** quiere que el candidato conozca el _retry storm_ (thundering herd), el _jitter_, y la precondición de idempotencia.
 
-**Respuesta de un senior:** un retry ingénuo puede **amplificar** un fallo: si todos los clientes reintentan al mismo segundo (sin jitter) contra un servicio que se está recuperando, lo tiran de nuevo — es el _thundering herd_. Lo hago seguro con: **backoff exponencial** con **jitter** (±50%) para repartir los reintentos; **máximo 3–5 intentos**; reintentar **solo errores transitorios** (5xx, timeouts, 429 respetando `Retry-After`) y nunca un 400/404; **idempotencia como precondición** (POST con Idempotency-Key, Módulo 09); y un **retry budget** global (no más del X% de requests con retry) para que un fallo no multiplique la carga.
+   **Respuesta de un senior:** un retry ingénuo puede **amplificar** un fallo: si todos los clientes reintentan al mismo segundo (sin jitter) contra un servicio que se está recuperando, lo tiran de nuevo — es el _thundering herd_. Lo hago seguro con: **backoff exponencial** con **jitter** (±50%) para repartir los reintentos; **máximo 3–5 intentos**; reintentar **solo errores transitorios** (5xx, timeouts, 429 respetando `Retry-After`) y nunca un 400/404; **idempotencia como precondición** (POST con Idempotency-Key, Módulo 09); y un **retry budget** global (no más del X% de requests con retry) para que un fallo no multiplique la carga.
 
-**5. "¿Cómo manejas el timeout en una cadena de servicios? ¿Qué es la propagación de deadline?"**
+5. **"¿Cómo manejas el timeout en una cadena de servicios? ¿Qué es la propagación de deadline?"**
 
-**Orientación:** evalúa si entiende que los timeouts se _acumulan_ y que el presupuesto total debe repartirse.
+   **Orientación:** evalúa si entiende que los timeouts se _acumulan_ y que el presupuesto total debe repartirse.
 
-**Respuesta de un senior:** tres timeouts por llamada (connect, read, total), específicos por dependencia, y el patrón clave es la **propagación de deadline**: al llamar al siguiente servicio paso el _tiempo restante_ del presupuesto total del request (contexto con deadline), así la suma nunca excede lo que el cliente puede esperar. Sin esto, 5 servicios × 30 s = 150 s de peor caso mientras el caller original ya no está. Combinado con timeouts, el **circuit breaker** corta la dependencia crónica y el **bulkhead** limita los recursos — los tres juntos evitan que una dependencia lenta consuma todo.
+   **Respuesta de un senior:** tres timeouts por llamada (connect, read, total), específicos por dependencia, y el patrón clave es la **propagación de deadline**: al llamar al siguiente servicio paso el _tiempo restante_ del presupuesto total del request (contexto con deadline), así la suma nunca excede lo que el cliente puede esperar. Sin esto, 5 servicios × 30 s = 150 s de peor caso mientras el caller original ya no está. Combinado con timeouts, el **circuit breaker** corta la dependencia crónica y el **bulkhead** limita los recursos — los tres juntos evitan que una dependencia lenta consuma todo.
 
-**6. "¿Qué es backpressure y cómo lo aplicarías? ¿Y load shedding?"**
+6. **"¿Qué es backpressure y cómo lo aplicarías? ¿Y load shedding?"**
 
-**Orientación:** quiere la definición como _control de flujo_, las implementaciones (colas, reactive streams, rate limiting), y la idea de proteger lo esencial.
+   **Orientación:** quiere la definición como _control de flujo_, las implementaciones (colas, reactive streams, rate limiting), y la idea de proteger lo esencial.
 
-**Respuesta de un senior:** backpressure es control de flujo para que un productor más rápido que el consumidor no lo desborde. Lo aplico con **colas finitas** (implicit backpressure: si la cola crece, el productor es rechazado), **rate limiting** en el borde, y **reactive streams** cuando necesito control explícito por demanda. Y cuando la sobrecarga ya está aquí, aplico **load shedding**: rechazo lo no esencial para proteger lo crítico — servidores que dejan de aceptar trabajo son los que sobreviven. La idea subyacente: el sistema debe **degradar con gracia** (graceful degradation) y volver al ritmo normal cuando baja la presión.
+   **Respuesta de un senior:** backpressure es control de flujo para que un productor más rápido que el consumidor no lo desborde. Lo aplico con **colas finitas** (implicit backpressure: si la cola crece, el productor es rechazado), **rate limiting** en el borde, y **reactive streams** cuando necesito control explícito por demanda. Y cuando la sobrecarga ya está aquí, aplico **load shedding**: rechazo lo no esencial para proteger lo crítico — servidores que dejan de aceptar trabajo son los que sobreviven. La idea subyacente: el sistema debe **degradar con gracia** (graceful degradation) y volver al ritmo normal cuando baja la presión.
 
-**7. "¿Cómo escalarías las lecturas y las escrituras de una base de datos?"**
+7. **"¿Cómo escalarías las lecturas y las escrituras de una base de datos?"**
 
-**Orientación:** espera la separación de paths (reads con caché + réplicas, writes con particionado) y la mención del _lag_ de réplicas. Evita repetir sharding en profundidad (Módulo 05).
+   **Orientación:** espera la separación de paths (reads con caché + réplicas, writes con particionado) y la mención del _lag_ de réplicas. Evita repetir sharding en profundidad (Módulo 05).
 
-**Respuesta de un senior:** primero separo los paths. **Lecturas:** caché (Redis/CDN) para lo caliente, y **read replicas** que descargan al primario, con _read-your-writes_ para queries que deben reflejar la escritura inmediata (por el **lag asíncrono** de las réplicas). **Escrituras:** si el volumen o los datos lo exigen, **sharding** horizontal por un shard key bien elegido — pero solo cuando agoté replicas y caché, porque el sharding trae joins cross-shard, transacciones distribuidas y rebalanceo. En AWS, Aurora da hasta 15 réplicas y lag en ms; y para writes el patrón es particionar (los detalles de particionado/consistent hashing están en el Módulo 05).
+   **Respuesta de un senior:** primero separo los paths. **Lecturas:** caché (Redis/CDN) para lo caliente, y **read replicas** que descargan al primario, con _read-your-writes_ para queries que deben reflejar la escritura inmediata (por el **lag asíncrono** de las réplicas). **Escrituras:** si el volumen o los datos lo exigen, **sharding** horizontal por un shard key bien elegido — pero solo cuando agoté replicas y caché, porque el sharding trae joins cross-shard, transacciones distribuidas y rebalanceo. En AWS, Aurora da hasta 15 réplicas y lag en ms; y para writes el patrón es particionar (los detalles de particionado/consistent hashing están en el Módulo 05).
 
-**8. "¿Qué es la degradación elegante (graceful degradation) y cómo la diseñas?"**
+8. **"¿Qué es la degradación elegante (graceful degradation) y cómo la diseñas?"**
 
-**Orientación:** quiere una postura de diseño (fallbacks, prioridades, features) más que definiciones.
+   **Orientación:** quiere una postura de diseño (fallbacks, prioridades, features) más que definiciones.
 
-**Respuesta de un senior:** es que el sistema, ante fallo, sirva una **versión reducida pero útil** en lugar de caer: un fallback con el último dato cacheado, deshabilitar funciones no críticas con feature flags, y endpoints con **prioridad** (lo esencial primero) bajo estrés. Los circuit breakers son el mecanismo: cuando una dependencia falla, en vez de error devuelvo el fallback. Y la observabilidad (Módulo 07) es la que me dice _qué_ está degradado. El objetivo es que el sistema se **doble en vez de romperse** — que el usuario perciba lentitud o funciones limitadas, no una página blanca.
+   **Respuesta de un senior:** es que el sistema, ante fallo, sirva una **versión reducida pero útil** en lugar de caer: un fallback con el último dato cacheado, deshabilitar funciones no críticas con feature flags, y endpoints con **prioridad** (lo esencial primero) bajo estrés. Los circuit breakers son el mecanismo: cuando una dependencia falla, en vez de error devuelvo el fallback. Y la observabilidad (Módulo 07) es la que me dice _qué_ está degradado. El objetivo es que el sistema se **doble en vez de romperse** — que el usuario perciba lentitud o funciones limitadas, no una página blanca.
 
-**9. "¿Qué es chaos engineering y cómo lo pondrías en práctica de forma segura?"**
+9. **"¿Qué es chaos engineering y cómo lo pondrías en práctica de forma segura?"**
 
-**Orientación:** evalúa la disciplina (hipótesis, blast radius, progresión) y que no sea "romper producción por diversión".
+   **Orientación:** evalúa la disciplina (hipótesis, blast radius, progresión) y que no sea "romper producción por diversión".
 
-**Respuesta de un senior:** es la práctica de **inyectar fallos de forma controlada** para validar hipótesis de resiliencia — porque si nunca probaste el fallo, tu resiliencia es solo documentación. Netflix lo inició con Chaos Monkey (mataba instancias en producción). Lo pongo en práctica con: empezar en **staging** y luego producción con **blast radius pequeño** (un nodo, un ASG al 10%); definir una **hipótesis medible** ("con 20% de instancias caídas, el p99 se mantiene <500 ms"); usar herramientas como AWS FIS, Gremlin, Litmus; y **game days** planificados. La clave es que cada experimento genere una _lección accionable_, no ruido.
+   **Respuesta de un senior:** es la práctica de **inyectar fallos de forma controlada** para validar hipótesis de resiliencia — porque si nunca probaste el fallo, tu resiliencia es solo documentación. Netflix lo inició con Chaos Monkey (mataba instancias en producción). Lo pongo en práctica con: empezar en **staging** y luego producción con **blast radius pequeño** (un nodo, un ASG al 10%); definir una **hipótesis medible** ("con 20% de instancias caídas, el p99 se mantiene <500 ms"); usar herramientas como AWS FIS, Gremlin, Litmus; y **game days** planificados. La clave es que cada experimento genere una _lección accionable_, no ruido.
 
-**10. "¿Cómo medirías la performance de un endpoint y cómo la reportarías a un usuario/equipo?"**
+10. **"¿Cómo medirías la performance de un endpoint y cómo la reportarías a un usuario/equipo?"**
 
-**Orientación:** quiere que el candidato distinga throughput/latencia, use percentiles (no promedios) y conecte con SLOs.
+    **Orientación:** quiere que el candidato distinga throughput/latencia, use percentiles (no promedios) y conecte con SLOs.
 
-**Respuesta de un senior:** mido **throughput** (req/s) y **latencia por percentiles** p50/p95/p99/p999 — nunca promedios, porque el promedio esconde la cola de fallas (tail latency) y "el promedio miente". La métrica que el usuario percibe es el **p99/p999**, y en cadenas síncronas la latencia se _amplifica_ con cada llamada (Módulo 01). Reporto contra un **SLO** (ej. p99 < 500 ms) con un **error budget**, como en el Módulo 07, y uso profiling (flame graphs) y APM para encontrar dónde se va el tiempo. Para capacidad uso la Ley de Little (`L = λ × W`) — la carga del sistema depende de la tasa y del tiempo en vuelo, lo que conecta performance con backpressure.
+    **Respuesta de un senior:** mido **throughput** (req/s) y **latencia por percentiles** p50/p95/p99/p999 — nunca promedios, porque el promedio esconde la cola de fallas (tail latency) y "el promedio miente". La métrica que el usuario percibe es el **p99/p999**, y en cadenas síncronas la latencia se _amplifica_ con cada llamada (Módulo 01). Reporto contra un **SLO** (ej. p99 < 500 ms) con un **error budget**, como en el Módulo 07, y uso profiling (flame graphs) y APM para encontrar dónde se va el tiempo. Para capacidad uso la Ley de Little (`L = λ × W`) — la carga del sistema depende de la tasa y del tiempo en vuelo, lo que conecta performance con backpressure.
 
 ---
 
@@ -409,3 +409,7 @@ Inyección **controlada** de fallos en producción para validar las hipótesis d
 - **Google SRE Book** — load shedding, latency, percentiles, SLOs (cruzado con Módulo 07).
 - **The DevOps Handbook** — Kim, Humble, Debois, Willis, Forsgren (IT Revolution, 2021). Teoría de Restricciones aplicada a la capacidad (cuello de botella determina el throughput).
 - [Módulo 01](01-Arquitectura-de-Software-Moderna.md), [Módulo 03](03-Event-Driven-Architecture.md), [Módulo 04](04-AWS-Serverless.md), [Módulo 05](05-Bases-de-datos-distribuidas.md), [Módulo 07](07-Observabilidad.md), [Módulo 09](09-Diseño-de-APIs.md).
+
+---
+
+> _Más profundidad e implementaciones de referencia en el [**Apéndice A**](appends/10-Escalabilidad-y-Resiliencia-Apendice-A.md)._

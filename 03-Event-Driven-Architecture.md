@@ -10,15 +10,17 @@
 
 La **síncronía** es fácil de entender: un cliente pide algo, un servicio responde. Funciona... hasta que falla. En sistemas distribuidos la síncronía encadena dependencias temporales: si B es necesario para que A responda, **A y B fallarán juntos** (cascading failure).
 
-La **Event-Driven Architecture (EDA)** elimina ese acoplamiento temporal: los productores **emiten eventos** con lo que ocurrió (`OrderCreated`, `PaymentConfirmed`, `StockReserved`), sin necesitar saber quién ni cuándo consume. Los consumidores subscriben interés, procesan en su propio ritmo, reaccionan cuando pueden. EDA no es solo "asíncrono": es cambiar la pregunta de *"¿qué debe responder?"* por *"¿qué debe pasar como consecuencia?"*.
+La **Event-Driven Architecture (EDA)** elimina ese acoplamiento temporal: los productores **emiten eventos** con lo que ocurrió (`OrderCreated`, `PaymentConfirmed`, `StockReserved`), sin necesitar saber quién ni cuándo consume. Los consumidores subscriben interés, procesan en su propio ritmo, reaccionan cuando pueden. EDA no es solo "asíncrono": es cambiar la pregunta de _"¿qué debe responder?"_ por _"¿qué debe pasar como consecuencia?"_.
 
 **Cuándo EDA agrega valor real:**
+
 - **Escalabilidad desacoplada:** picos se absorben en la cola, no tiran el servicio.
 - **Extensibilidad:** nuevas reacciones se agregan suscribiéndose a eventos existentes sin tocar el productor.
 - **Resiliencia:** fallos parciales no cortan al productor (o al contrario, se pierden controladamente a DLQ con evento para compensar).
 - **Tiempo real:** eventos como fuente de verdad (auditoría, replay, analytics).
 
 **Cuándo EDA sería exageración:**
+
 - CRUD simple donde respuesta síncrona basta.
 - Equipos sin madurez en observabilidad distribuida (la depuración se convierte en pesadilla).
 - Requisitos de consistencia estricta e inmediata (la banca central no tolera "eventualmente"); aunque se puede diseñar para este caso, el costo explica por qué core ledger sigue siendo centralizado en muchas empresas.
@@ -32,6 +34,7 @@ En este módulo profundizamos en la **teoría** (semánticas de entrega, consist
 ### 1. ¿Qué es un evento?
 
 Un **evento** es un registro **inmutable** de que algo ocurrió en el sistema. Tiene:
+
 - **Tipo** (qué pasó): `OrderCreated`
 - **Ocurrió en** (timestamp, zona horaria)
 - **Subject** (qué afecta): el aggregate involucrado (orderId)
@@ -50,6 +53,7 @@ Un **evento** es un registro **inmutable** de que algo ocurrió en el sistema. T
 ```
 
 **Diferencia fundamental:**
+
 - **Commands** ("haz esto") van a **un** destinatario y llevan intención; suelen ser síncronos (o vistos desde fuera).
 - **Events** ("esto ocurrió") son hechos descritos en pasado; se publican a todo el bus interesado. **No se preguntan al emisor quién los consume**.
 
@@ -57,11 +61,11 @@ Un **evento** es un registro **inmutable** de que algo ocurrió en el sistema. T
 
 Cuando publicas un mensaje/evento, **qué garantías** hay sobre su llegada. Esto es lo que separa un sistema estable de uno caótico.
 
-| Semántica | Mecanismo típico | Pros | Contras | Caso de uso |
-|---|---|---|---|---|
-| **At-most-once** | Sin ACK, sin retries (fire and forget) | Mínima latencia, sin duplicados | **Pérdida** posible | Métricas/telemetría donde perder algunos puntos no importa |
-| **At-least-once** | Reintentos + ACK del consumidor | **Nunca pierde** | **Puede duplicar** | Default de la industria — requiere consumidor **idempotente** |
-| **Exactly-once** | Transacciones distribuidas o deduplicación perfecta | Parece ideal | En sistemas distribuidos **exactly-once real de extremo a extremo no existe** | Lo que se logra es **effectively-once** (at-least-once + idempotencia) y bounded exactly-once (Kafka transacciones dentro de Kafka, SQS FIFO con dedup por dedup-id) |
+| Semántica         | Mecanismo típico                                    | Pros                            | Contras                                                                       | Caso de uso                                                                                                                                                          |
+| ----------------- | --------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **At-most-once**  | Sin ACK, sin retries (fire and forget)              | Mínima latencia, sin duplicados | **Pérdida** posible                                                           | Métricas/telemetría donde perder algunos puntos no importa                                                                                                           |
+| **At-least-once** | Reintentos + ACK del consumidor                     | **Nunca pierde**                | **Puede duplicar**                                                            | Default de la industria — requiere consumidor **idempotente**                                                                                                        |
+| **Exactly-once**  | Transacciones distribuidas o deduplicación perfecta | Parece ideal                    | En sistemas distribuidos **exactly-once real de extremo a extremo no existe** | Lo que se logra es **effectively-once** (at-least-once + idempotencia) y bounded exactly-once (Kafka transacciones dentro de Kafka, SQS FIFO con dedup por dedup-id) |
 
 **Teorema de los dos generales:** demuestra que en presencia de una red no fiable, **no existe protocolo finito que garantice agreement** entre participantes, i.e., exactly-once general es imposible. El trabajo real del ingeniero senior está en **diseñar efectivamente-once** (idempotencia + dedup + compensación) y documentarlo como tal.
 
@@ -70,18 +74,20 @@ Cuando publicas un mensaje/evento, **qué garantías** hay sobre su llegada. Est
 Definida en el [Glosario](00-Glosario.md). Operativamente: emitiendo eventos y aceptando que las réplicas/proyecciones se sincronizan **con delay**. Esto permite que el sistema siga aceptando trabajo aunque un servicio esté lento o caído.
 
 **Implicaciones de diseño:**
+
 - Una lectura inmediata después de una escritura puede estar **vieja** (no read-your-writes)."
 - Soluciones: lecturas fuertes locales donde importan (pagos), "loading states" UX honestas, reconciliadores periódicos, monitoreo del lag de eventos.
 - **Trade-off explícito:** acepta un poco de inconsistencia temporal a cambio de disponibilidad y rendimiento a escala (ver PACELC en el [Glosario](00-Glosario.md)).
 
 ### 4. Idempotencia: piedra angular
 
-En [Módulo 02](02-Microservicios-y-DDD.md) y [Apéndice A de Módulo 1](01-Arquitectura-de-Software-Moderna-Apendice-A.md) quedó claro. Aquí profundizamos en técnicas distribuidas:
+En [Módulo 02](02-Microservicios-y-DDD.md) y [Apéndice A de Módulo 1](appends/01-Arquitectura-de-Software-Moderna-Apendice-A.md) quedó claro. Aquí profundizamos en técnicas distribuidas:
 
 1. **Idempotency key único por operación lógica.** Stripe lo implementa con `Idempotency-Key` header. El server key recupera y devuelve explícitamente el mismo resultado sin efectos de lado.
 2. **Deduplicación de mensajes.** SQS FIFO: `MessageDeduplicationId`. Kafka: claves y `Transactional.id`. DynamoDB: constraint `attribute_not_exists(pk)`.
 
 Patrón código (Lambda consumer de SQS FIFO):
+
 ```python
 def handler(event, context):
     for record in event['Records']:
@@ -94,27 +100,29 @@ def handler(event, context):
 
 #### El "problema del zombie" y los fencing tokens
 
-Figura que refina el exactly-once tras un *failover*: un **zombie** es un consumidor/lock-holder que perdió su lease pero aún no lo sabe y sigue actuando como si fuera el único. Sucede por una **pausa de proceso** (GC, VM suspendida) o por una respuesta **retrasada en la red** (puede tardar minutos en llegar tras el failover). Si dos nodos creen simultáneamente ser el líder/único procesador, tienes **split-brain** y riesgo de corromper datos. "Matar al otro nodo" (STONITH) no basta: no protege de las respuestas retrasadas que ya viajan por la red. La solución robusta es el **fencing token**: cada vez que el lock/lease se concede, el servicio de coordinación devuelve un número que se incrementa en cada concesión; el consumidor lo incluye en su escritura, y el storage **rechaza cualquier escritura con un token inferior al último visto**. El nodo zombie queda así *fenced off* y no puede inducir corrupción. (Nombres alternativos: sequencers en Chubby, epoch en Kafka, term en Raft.) Es el mecanismo real detrás de "solo una vez" cuando hay failover, más allá de la simple idempotencia.
+Figura que refina el exactly-once tras un _failover_: un **zombie** es un consumidor/lock-holder que perdió su lease pero aún no lo sabe y sigue actuando como si fuera el único. Sucede por una **pausa de proceso** (GC, VM suspendida) o por una respuesta **retrasada en la red** (puede tardar minutos en llegar tras el failover). Si dos nodos creen simultáneamente ser el líder/único procesador, tienes **split-brain** y riesgo de corromper datos. "Matar al otro nodo" (STONITH) no basta: no protege de las respuestas retrasadas que ya viajan por la red. La solución robusta es el **fencing token**: cada vez que el lock/lease se concede, el servicio de coordinación devuelve un número que se incrementa en cada concesión; el consumidor lo incluye en su escritura, y el storage **rechaza cualquier escritura con un token inferior al último visto**. El nodo zombie queda así _fenced off_ y no puede inducir corrupción. (Nombres alternativos: sequencers en Chubby, epoch en Kafka, term en Raft.) Es el mecanismo real detrás de "solo una vez" cuando hay failover, más allá de la simple idempotencia.
 
-> *Fuente: DDIA, Cap. 9, § "Distributed Locks and Leases / Fencing off zombies and delayed requests".*
+> _Fuente: DDIA, Cap. 9, § "Distributed Locks and Leases / Fencing off zombies and delayed requests"._
 
 ### 5. Event Ordering y Causality
 
 En distribuido no existe "tiempo global"; los relojes no son confiables. **Eventual consistency + eventos + orden** implica:
+
 - **Partial ordering:** dentro de un stream/topic partition, orden garantizado (Kafka, SQS FIFO).
 - **Total ordering:** solo con coordinación (consensus), caro, evitar cuando sea posible.
 - **Causality tracking:** version vectors, lamport timestamps o simplemente `causationId`/`correlationId` por evento para reconstruir dependencias.
 
 A veces el orden importa realmente (`OrderCreated` antes de `OrderFulfilled` del mismo orderID). Lo manejas con:
+
 - Partition keys que agrupan eventos por entidad (`order_id`).
 - `SequenceNumber` por aggregate.
 - Buffering minimalista en consumidor (no intentes reordenar universo entero).
 
 #### Event time vs processing time (y los eventos rezagados / stragglers)
 
-En streams no basta con "tener orden": hay que distinguir **cuándo ocurrió el evento** (event time, el timestamp de negocio) de **cuándo lo procesa tu sistema** (processing time). Si agrupas/agregas por *processing time*, cualquier atraso (colas, un redeploy que bufferea el backlog, un reprocesamiento tras una caída) genera **artefactos**: p. ej., al reprocesar el backlog, la métrica de requests/seg parece tener un pico falso cuando en realidad el tráfico fue constante; confundir ambos produce datos malos. Además, el orden de llegada no garantiza el orden de *causalidad*: dos servidores pueden emitir eventos que llegan al broker en orden inverso (como ver Star Wars por fecha de estreno vs. por episodio). Con ventanas por *event time* aparece el problema de los **stragglers**: nunca sabes si ya llegaron todos los eventos de una ventana; las opciones son ignorarlos (midiendo cuánto descartas) o publicar una **corrección/retractación**. En eventos de móvil offline, el timestamp debió generarse en el dispositivo (reloj poco confiable); la práctica es loguear tres timestamps (device send / device recv / server recv) para estimar el offset.
+En streams no basta con "tener orden": hay que distinguir **cuándo ocurrió el evento** (event time, el timestamp de negocio) de **cuándo lo procesa tu sistema** (processing time). Si agrupas/agregas por _processing time_, cualquier atraso (colas, un redeploy que bufferea el backlog, un reprocesamiento tras una caída) genera **artefactos**: p. ej., al reprocesar el backlog, la métrica de requests/seg parece tener un pico falso cuando en realidad el tráfico fue constante; confundir ambos produce datos malos. Además, el orden de llegada no garantiza el orden de _causalidad_: dos servidores pueden emitir eventos que llegan al broker en orden inverso (como ver Star Wars por fecha de estreno vs. por episodio). Con ventanas por _event time_ aparece el problema de los **stragglers**: nunca sabes si ya llegaron todos los eventos de una ventana; las opciones son ignorarlos (midiendo cuánto descartas) o publicar una **corrección/retractación**. En eventos de móvil offline, el timestamp debió generarse en el dispositivo (reloj poco confiable); la práctica es loguear tres timestamps (device send / device recv / server recv) para estimar el offset.
 
-> *Fuente: DDIA, Cap. 12, §§ "Event time versus processing time" y "Handling straggler events".*
+> _Fuente: DDIA, Cap. 12, §§ "Event time versus processing time" y "Handling straggler events"._
 
 ---
 
@@ -123,34 +131,42 @@ En streams no basta con "tener orden": hay que distinguir **cuándo ocurrió el 
 ### Topologías de EDA
 
 #### a) Pub/Sub puro (Fan-out)
+
 Un bus/topic y muchos suscriptores independientes. Cada suscriptor decide qué consume (filtros).
+
 ```text
               ┌──> EmailNotifier
 OrderCreated ─┼──> InventoryUpdater
               └──> AnalyticsIndexer
 ```
+
 Ventaja: extensibilidad extrema. Desventaja: no hay orden entre ramas.
 
 #### b) Cola de trabajo (point-to-point)
+
 Mensajes repartidos entre workers (uno lo toma, lo procesa, ACK).
+
 ```text
 QueueOrders ──> Worker1
             └─> Worker2
 ```
+
 Ventaja: escalado horizontal sencillo, desacoplamiento de carga. Desventaja: no broadcast.
 
 #### c) Event Bus / Router con reglas
+
 Broker inteligente (EventBridge) con resgistro de schemas y reglas de routing. Permite pipes de transformación, transformaciones, destinos múltiples (Lambda, SQS, API destino).
 
 #### d) Streaming con durabilidad (Kafka/Event store)
+
 Un log inmutable donde consumidores **lejan desde un offset determinado** (los últimos 5 minutos o desde el principio). Es fundamentalmente distinto de cola: **replay** es posible y diseñado. Permite Event Sourcing.
 
 ### Broker vs. Bus vs. Stream: roles en EDA
 
-| Rol | Ejemplo AWS | Cuándo |
-|---|---|---|
-| **Queue** | SQS | Trabajo pesado, at-least-once, fan-in de workers |
-| **Topic/pubsub** | SNS, EventBridge | Fan-out, routing por tipo/atributos |
+| Rol                    | Ejemplo AWS        | Cuándo                                                 |
+| ---------------------- | ------------------ | ------------------------------------------------------ |
+| **Queue**              | SQS                | Trabajo pesado, at-least-once, fan-in de workers       |
+| **Topic/pubsub**       | SNS, EventBridge   | Fan-out, routing por tipo/atributos                    |
 | **Stream/event store** | Kafka/MSK, Kinesis | Inmutable log, replay, high throughput, event sourcing |
 
 Estas tres no compiten; **se combinan** (un evento publica a EventBridge, una regla deriva a SQS para trabajo duro, y otro stream replica a Kinesis para analytics).
@@ -162,16 +178,19 @@ Estas tres no compiten; **se combinan** (un evento publica a EventBridge, una re
 ### Semánticas bajo el capó
 
 #### SQS
+
 - **Tipos:** Standard (máxima escala, at-least-once, sin orden global) vs FIFO (exactly-once por grupo, orden dentro de MessageGroupID, throughput limitado).
 - **Visibility timeout:** mientras procesas, el mensaje queda invisible para otros; si no confirmas a tiempo, reaparece.
 - **DLQ:** mensajes con demasiados retries fallidos van a Dead Letter Queue para investigación/reingesta manual.
 - **FIFO late triggers:** los mensajes se ordenan por grupo; si un consumidor no responde a tiempo, bloquea (head-of-line) el grupo hasta retry. Diseño para evitar keys truncadas.
 
 #### SNS / EventBridge
+
 - SNS = pub/sub simple y masivo, menos routing inteligente.
 - **EventBridge** además tiene buses (default, custom, partner), **reglas** (partitionadas por cuenta), **schema registry** (catalogo OpenAPI de eventos), pipes de transformación.
 
 #### Kafka/MSK
+
 - Particiones = unidad de escalabilidad y orden parcial (orden total por clave).
 - Consumer groups para procesamiento paralelo.
 - **Compacted topics** para snapshot de estado.
@@ -201,10 +220,10 @@ await db.transaction(async (trx) => {
 
 No existe "rollback" global entre servicios que ya commitiaron. Cada paso tiene una **compensación definida por el negocio**:
 
-| Acción | Compensación (business aware) |
-|---|---|
-| Reservar pago (captura) | Void/Reembolso según el caso |
-| Confirmar stock | Liberar reserva (no op si pedido cancelado) |
+| Acción                             | Compensación (business aware)                           |
+| ---------------------------------- | ------------------------------------------------------- |
+| Reservar pago (captura)            | Void/Reembolso según el caso                            |
+| Confirmar stock                    | Liberar reserva (no op si pedido cancelado)             |
 | Enviar notificación al restaurante | Enviar "pedido cancelado" (no borrar mensajes enviados) |
 
 Los pasos compensatorios **desencadenan lo mismo conocimiento** y se publican a su vez como eventos (`PaymentRefunded`, `StockReleased`), haciendo que el deshacer también sea auditable.
@@ -319,6 +338,7 @@ Cierre de atomicidad local con nevado global (sección Internals).
 ### Dead Letter Queue (DLQ) y Reprocess
 
 Mensajes con errores repetidos van a DLQ. **Buenas prácticas:**
+
 - Monitor de alarm por tamaño de la DLQ.
 - Inspector/reprocess (manual UI o Lambda que reintenta).
 - Redrive automático tras X Horas/Días.
@@ -330,15 +350,17 @@ Mensajes con errores repetidos van a DLQ. **Buenas prácticas:**
 ### Caso 1: Pedidos de comida (Saga orquestada)
 
 Flujo (éxito):
+
 ```
 Orquestador (Step Function)
-  ├─ ValidateOrder  → OK
-  ├─ ReservePayment → OK
-  ├─ ReserveStock   → OK
-  ├─ NotifyRestaurant → OK
-  └─ AssignDriver   → OK
+  ├─ ValidateOrder     → OK
+  ├─ ReservePayment    → OK
+  ├─ ReserveStock      → OK
+  ├─ NotifyRestaurant  → OK
+  └─ AssignDriver      → OK
 OrderConfirmed(publish)
 ```
+
 Fallo en `ReserveStock`: compensar `ReservePayment` → VoidPayment. Emitir `OrderCancelled` con razón. El usuario recibe notificación explícita.
 
 **Por qué EventBridge+Step Functions:** pocos pasos críticos, dinero involucrado, soporte visual del flujo para auditoría regulatoria, evita pasar work-status por colas múltiples que podrían perderse.
@@ -347,6 +369,7 @@ Fallo en `ReserveStock`: compensar `ReservePayment` → VoidPayment. Emitir `Ord
 
 Servicio Analytics consumía `OrderCreated` con `totalCents`. Un equipo migró a `amountInCents`. Se hizo breaking change sin querer.
 **Solución madura:**
+
 - Schema Registry con política de compatibilidad (BACKWARD).
 - Consumer contract tests antes del despliegue (Pact/Schemathesis #modulo 2 apéndice).
 - Proyecto de migración: dual-publish por N días, consumers migran, luego el esquema viejo se marca DEPRECATED y se elimina —ADR comunicando.
@@ -354,37 +377,45 @@ Servicio Analytics consumía `OrderCreated` con `totalCents`. Un equipo migró a
 ### Caso 3: Event Sourcing para ledger financiero
 
 Core bancario: cada ingreso/gasto es un evento en Kafka/MSK. Saldo calculado = proyección CQRS. Requisitos:
+
 - Regulador exige audit (log inmutable).
 - Royalties "día X" vs "ahora".
-**Implementación:** snapshots cada 1000 eventos, read model en Postgres, snapshot store en S3, replay UI-perficente al re-calcular al empezar el mes.
+  **Implementación:** snapshots cada 1000 eventos, read model en Postgres, snapshot store en S3, replay UI-perficente al re-calcular al empezar el mes.
 
 ---
 
 ## Laboratorio
 
 ### Lab 1 (arquitectura): EDA design
+
 Toma el food-delivery de antes. Propón:
+
 1. Lista de eventos de dominio relevantes (`OrderCreated`, `PaymentAuthorized`, `StockReserved`, `RestaurantNotified`, `DriverAssigned`, `DeliveryConfirmed`, `OrderCancelled`).
 2. Define producers y consumers de cada evento.
 3. Qué bounded context posee cada esquema evento.
 4. Dibujar flujo saga orquestado (antes-descrito) — término de compensaciones en negativo.
 
 ### Lab 2 (código): Outbox implementation
-EN TypeScript/Node (o Python):
+
+En TypeScript/Node (o Python):
+
 - Persiste una `Order` y una fila `outbox` en una sola transacción (Postgre).
-- Un *outbox worker* hace polling cada 5s seleccionando PENDING, publica a SNS/SQS, marca `SENT`.
+- Un _outbox worker_ hace polling cada 5s seleccionando PENDING, publica a SNS/SQS, marca `SENT`.
 - Simula un fallo entre los pasos y mide/verifica que el evento es reintenta al menos una vez hasta exitoso.
 
 ### Lab 3 (resiliencia): DLQ Alarmado
+
 - Configura cola con max retries = 3.
 - Fuerza un escenario que falle (consumer que lanza excepción).
 - Verifícate que tras 3 intentos la mensaje llega a DLQ y hay alarma CloudWatch configurada.
 - Proceso manual re-drive y verificación de idempotencia del consumidor.
 
 ### Lab 4 (exactly-once dedupe)
+
 SQS FIFO con `MessageDeduplicationId` para operación crítica. Genera duplicados intencionales y confirma que el efecto final ocurre una única vez.
 
 ### Lab 5 (orquestación con Step Functions)
+
 Diseña la definición ASL (Amazon States Language) del Saga del Lab 1, con pasos de tipo Task y campos `Retry`,`Catch`.
 
 ---
@@ -393,63 +424,63 @@ Diseña la definición ASL (Amazon States Language) del Saga del Lab 1, con paso
 
 1. **Explica la diferencia entre at-least-once y exactly-once.**
 
-   **Orientación:** Demuestran que entiendes que el "exactly-once" perfecto es un ideal irrealizable en sistemas distribuidos (problema de los dos generales) y que la solución práctica es *effectively once* (at-least-once + idempotencia).
+   **Orientación:** Demuestran que entiendes que el "exactly-once" perfecto es un ideal irrealizable en sistemas distribuidos (problema de los dos generales) y que la solución práctica es _effectively once_ (at-least-once + idempotencia).
 
-   **Respuesta de un senior:** "Los brokers modernos dan *at-least-once*: garantizan que el mensaje no se pierde, pero no que se entregue una sola vez; en la práctica un consumidor puede recibir un duplicado tras un timeout o un reintento. El 'exactly-once perfecto' es irrealizable entre dos sistemas distribuidos: se reduce al problema de los dos generales, donde sin canal confiable no puedes probar que el otro ha confirmado. Lo que la industria realmente usa es *effectively once*: at-least-once más *idempotencia* en el consumidor. Hago la operación idempotente (una clave de deduplicación o una condición en la base de datos tipo 'si ya existía, no volver a aplicar'), de modo que aunque llegue dos veces el resultado neto es el mismo. Eso me da el 'una sola vez' que el negocio necesita sin depender de garantías imposibles del transporte."
+   **Respuesta de un senior:** "Los brokers modernos dan _at-least-once_: garantizan que el mensaje no se pierde, pero no que se entregue una sola vez; en la práctica un consumidor puede recibir un duplicado tras un timeout o un reintento. El 'exactly-once perfecto' es irrealizable entre dos sistemas distribuidos: se reduce al problema de los dos generales, donde sin canal confiable no puedes probar que el otro ha confirmado. Lo que la industria realmente usa es _effectively once_: at-least-once más _idempotencia_ en el consumidor. Hago la operación idempotente (una clave de deduplicación o una condición en la base de datos tipo 'si ya existía, no volver a aplicar'), de modo que aunque llegue dos veces el resultado neto es el mismo. Eso me da el 'una sola vez' que el negocio necesita sin depender de garantías imposibles del transporte."
 
 2. **¿Cómo manejas transacciones distribuidas en Event-Driven Architecture?**
 
    **Orientación:** Esperan Saga, compensaciones de negocio, Outbox y monitorización de dead letter queues, con un ejemplo concreto.
 
-   **Respuesta de un senior:** "En EDA no tengo una transacción que abarque varios servicios; tengo consistencia eventual. Uso *Saga*: una secuencia de pasos, cada uno dentro de un servicio, con su compensación. En coreografía, cada servicio publica un evento y reacciona a los demás; en orquestación, un coordinador distribuye y supervisa los pasos. El patrón *Outbox* es crítico: cuando un servicio cambia su base de datos, escribe el evento de salida en la misma transacción local y un relé lo publica después, garantizando que el cambio de estado y la notificación ocurren juntos o no ocurren. Ejemplo concreto de pago: 'OrderCreated' → el servicio de inventario reserva y emite 'StockReserved' → el de pago cobra y emite 'PaymentCompleted'; si el pago falla, la compensación es emitir 'StockReleased' y devolver la orden a estado cancelada. Y siempre vigilo las dead letter queues con alertas, porque los mensajes 'venenosos' que no se puedan procesar deben saltar a la vista, no perderse."
+   **Respuesta de un senior:** "En EDA no tengo una transacción que abarque varios servicios; tengo consistencia eventual. Uso _Saga_: una secuencia de pasos, cada uno dentro de un servicio, con su compensación. En coreografía, cada servicio publica un evento y reacciona a los demás; en orquestación, un coordinador distribuye y supervisa los pasos. El patrón _Outbox_ es crítico: cuando un servicio cambia su base de datos, escribe el evento de salida en la misma transacción local y un relé lo publica después, garantizando que el cambio de estado y la notificación ocurren juntos o no ocurren. Ejemplo concreto de pago: 'OrderCreated' → el servicio de inventario reserva y emite 'StockReserved' → el de pago cobra y emite 'PaymentCompleted'; si el pago falla, la compensación es emitir 'StockReleased' y devolver la orden a estado cancelada. Y siempre vigilo las dead letter queues con alertas, porque los mensajes 'venenosos' que no se puedan procesar deben saltar a la vista, no perderse."
 
 3. **¿Cuándo eliges cola FIFO ordenada vs estándar?**
 
-   **Orientación:** Quieren que balancees *orden* contra *throughput* y la limitación FIFO con agrupación por agregado.
+   **Orientación:** Quieren que balancees _orden_ contra _throughput_ y la limitación FIFO con agrupación por agregado.
 
-   **Respuesta de un senior:** "Elijo FIFO cuando el orden de los mensajes es semánticamente importante —por ejemplo, actualizaciones secuenciales del mismo pedido, donde aplicar 'pay' antes que 'create' rompe el estado—. La cola FIFO garantiza exactly-once y entrega en orden por *message group id*, que uso para agrupar por la entidad (por ejemplo, el `orderId`): cada pedido se procesa en orden, pero grupos distintos pueden ir en paralelo. El costo es throughput: FIFO tiene menor rendimiento y la limitación de que un grupo bloquea la cabeza de línea. Si el orden no importa (logout events, métricas, notificaciones que no compiten por estado), uso la estándar por su alto rendimiento y menor latencia. La regla es: orden por agregado → agrupar por `aggregateId`; sin requisito de orden → cola estándar por simplicidad y rendimiento."
+   **Respuesta de un senior:** "Elijo FIFO cuando el orden de los mensajes es semánticamente importante —por ejemplo, actualizaciones secuenciales del mismo pedido, donde aplicar 'pay' antes que 'create' rompe el estado—. La cola FIFO garantiza exactly-once y entrega en orden por _message group id_, que uso para agrupar por la entidad (por ejemplo, el `orderId`): cada pedido se procesa en orden, pero grupos distintos pueden ir en paralelo. El costo es throughput: FIFO tiene menor rendimiento y la limitación de que un grupo bloquea la cabeza de línea. Si el orden no importa (logout events, métricas, notificaciones que no compiten por estado), uso la estándar por su alto rendimiento y menor latencia. La regla es: orden por agregado → agrupar por `aggregateId`; sin requisito de orden → cola estándar por simplicidad y rendimiento."
 
 4. **Dead Letter Queue: ¿cómo la operas?**
 
    **Orientación:** Debes cubrir alertas sobre DLQ, inspección y redrive, y asumir el poisson message como inevitable.
 
-   **Respuesta de un senior:** "La DLQ es la red de seguridad para mensajes que no se procesan tras varios reintentos; no es un basurero. La opero así: (1) *alerto* sobre la métrica de 'mensajes en DLQ' con un umbral, porque crecer sin avisar es una pérdida silenciosa; (2) *inspecciono* el poisson antes de nada —abro uno, miro el payload y el error— para entender si es un mensaje corrupto que hay que descartar o un bug que hay que arreglar; (3) *valido con el schema* para cazar versiones antiguas o payloads mal formados; y (4) *planifico el redrive*: cuando está corregida la causa, reproceso los mensajes en orden y con logs para verificar. Asumo que los poisson messages son inevitables y por eso cada mensaje lleva metadatos de intento y causa de error. El objetivo es que un mensaje problemático nunca se pierda y siempre tenga una ruta de resolución auditada."
+   **Respuesta de un senior:** "La DLQ es la red de seguridad para mensajes que no se procesan tras varios reintentos; no es un basurero. La opero así: (1) _alerto_ sobre la métrica de 'mensajes en DLQ' con un umbral, porque crecer sin avisar es una pérdida silenciosa; (2) _inspecciono_ el poisson antes de nada —abro uno, miro el payload y el error— para entender si es un mensaje corrupto que hay que descartar o un bug que hay que arreglar; (3) _valido con el schema_ para cazar versiones antiguas o payloads mal formados; y (4) _planifico el redrive_: cuando está corregida la causa, reproceso los mensajes en orden y con logs para verificar. Asumo que los poisson messages son inevitables y por eso cada mensaje lleva metadatos de intento y causa de error. El objetivo es que un mensaje problemático nunca se pierda y siempre tenga una ruta de resolución auditada."
 
 5. **Diseña un sistema de eventos para una plataforma de alta volatilidad.**
 
    **Orientación:** Esperan EventBridge multi-bus, schema registry, consumidores idempotentes, trazabilidad y versionado con backward compatibility.
 
-   **Respuesta de un senior:** "Diseñaría sobre *múltiples buses por dominio* (EventBridge) separados por bounded context, para que un dominio no se acople a la evolución de otro. Cada evento pasa por un *schema registry* que valida el payload y su versión, garantizando contratos entre productor y consumidor. Los consumidores serán *idempotentes*, porque en high throughput va a haber duplicados. Añado *trazabilidad* end-to-end: `correlationId` y `traceId` en cada evento para seguir una transacción y debuggear. Para violaciones de contrato o fallos, cada bus alimenta su *DLQ con reintentos* configurados. Versiono los eventos con *backward compatibility* (agrego campos opcionales, nunca rompo nombres) para que productor y consumidor se desplieguen de forma independiente. Y monitoreo el throughput y la latencia del bus para ver picos de volatilidad antes de que degraden. El resultado es un backbone de eventos que escala y no se rompe cuando cambia la carga."
+   **Respuesta de un senior:** "Diseñaría sobre _múltiples buses por dominio_ (EventBridge) separados por bounded context, para que un dominio no se acople a la evolución de otro. Cada evento pasa por un _schema registry_ que valida el payload y su versión, garantizando contratos entre productor y consumidor. Los consumidores serán _idempotentes_, porque en high throughput va a haber duplicados. Añado _trazabilidad_ end-to-end: `correlationId` y `traceId` en cada evento para seguir una transacción y debuggear. Para violaciones de contrato o fallos, cada bus alimenta su _DLQ con reintentos_ configurados. Versiono los eventos con _backward compatibility_ (agrego campos opcionales, nunca rompo nombres) para que productor y consumidor se desplieguen de forma independiente. Y monitoreo el throughput y la latencia del bus para ver picos de volatilidad antes de que degraden. El resultado es un backbone de eventos que escala y no se rompe cuando cambia la carga."
 
 6. **¿Cuándo NO usarías Event-Driven Architecture?**
 
    **Orientación:** Buscan honestidad: baja latencia estricta, requerimientos síncronos, baja madurez y consistencia crítica ACID.
 
-   **Respuesta de un senior:** "EDA añade latencia y complejidad; no es la respuesta universal. No lo usaría en: *latencia crítica end-to-end*, donde el paso asíncrono por un broker añade overhead que el usuario no tolera; *contextos que requieren respuesta inmediata y síncrona* (un login, un pago con confirmación en el momento), donde esperar un evento de vuelta complica en vez de ayudar; *equipos con poca madurez operativa*, porque necesitas DLQs, monitoreo, reintentos y versionado que una arquitectura síncrona no exige; y *consistencia crítica manejada cómodamente con ACID* en un límite acotado, donde la eventual consistency de los eventos no aporta y solo complica. Mi criterio: EDA donde hay desacoplamiento real entre equipos, procesamiento asíncrono justificado o eventos de negocio que varios contextos consumen; para flujos simples y consistentes, síncrono directo."
+   **Respuesta de un senior:** "EDA añade latencia y complejidad; no es la respuesta universal. No lo usaría en: _latencia crítica end-to-end_, donde el paso asíncrono por un broker añade overhead que el usuario no tolera; _contextos que requieren respuesta inmediata y síncrona_ (un login, un pago con confirmación en el momento), donde esperar un evento de vuelta complica en vez de ayudar; _equipos con poca madurez operativa_, porque necesitas DLQs, monitoreo, reintentos y versionado que una arquitectura síncrona no exige; y _consistencia crítica manejada cómodamente con ACID_ en un límite acotado, donde la eventual consistency de los eventos no aporta y solo complica. Mi criterio: EDA donde hay desacoplamiento real entre equipos, procesamiento asíncrono justificado o eventos de negocio que varios contextos consumen; para flujos simples y consistentes, síncrono directo."
 
 7. **¿Ventajas y desventajas de producción de CQRS y Event Sourcing?**
 
    **Orientación:** Definen ambos, su parecido (los dos martillan la evolución del estado) y su realidad operativa en producción.
 
-   **Respuesta de un senior:** "Los dos se basan en eventos, pero son distintos. *Event Sourcing* persiste el estado como una secuencia inmutable de eventos y deriva el estado actual proyectándolos; te da auditoría completa, tiempo de viaje (reproyección) y reconstrucción histórica, pero exige manejar versionado de eventos, proyecciones y snapshotting, y es caro de operar en dominios donde eso no aporta valor. *CQRS* separa el modelo de escritura del modelo de lectura para optimizar cada uno; te da lectura optimizada y escalada de forma independiente, pero añade complejidad de consistencia (el lado de lectura puede ir tarde) y hay que mantener dos modelos. En producción, la desventaja común es el costo operativo y el riesgo de sobre-ingeniería: aplicarlos 'porque está de moda' crea más complejidad que la que resuelve. Los usaría donde el audit trail y la evolución histórica son requisito de negocio (fintech, compliance), no en un CRUD cualquiera."
+   **Respuesta de un senior:** "Los dos se basan en eventos, pero son distintos. _Event Sourcing_ persiste el estado como una secuencia inmutable de eventos y deriva el estado actual proyectándolos; te da auditoría completa, tiempo de viaje (reproyección) y reconstrucción histórica, pero exige manejar versionado de eventos, proyecciones y snapshotting, y es caro de operar en dominios donde eso no aporta valor. _CQRS_ separa el modelo de escritura del modelo de lectura para optimizar cada uno; te da lectura optimizada y escalada de forma independiente, pero añade complejidad de consistencia (el lado de lectura puede ir tarde) y hay que mantener dos modelos. En producción, la desventaja común es el costo operativo y el riesgo de sobre-ingeniería: aplicarlos 'porque está de moda' crea más complejidad que la que resuelve. Los usaría donde el audit trail y la evolución histórica son requisito de negocio (fintech, compliance), no en un CRUD cualquiera."
 
 8. **¿Cómo garantizas que un mensaje se procese una sola vez?**
 
    **Orientación:** La respuesta senior se apoya en idempotencia + dedup, at-least-once y cómo evitar el check-then-act.
 
-   **Respuesta de un senior:** "Parto de que el transporte es at-least-once, así que 'una sola vez' lo resuelvo en el consumidor con *efectos idempotentes*: la operación se diseña para que aplicarla dos veces sea equivalente a aplicarla una. Combino una *clave de deduplicación* (por ejemplo, un `dedupKey` basado en el `eventId`) que persisto con una condición atómica en la base de datos. Lo crítico es evitar el *check-then-act*: mirar '¿existe la clave?' y luego insertar no es seguro si dos procesos leen a la vez; en cambio uso una condición atómica del tipo 'inserta solo si la clave no existe', o `attribute_not_exists`, para que la competición no duplique el efecto. Con at-least-once + esa idempotencia consigo *effectively once*: la semántica que el negocio necesita. Nunca dependo de que el broker entregue exactamente una vez."
+   **Respuesta de un senior:** "Parto de que el transporte es at-least-once, así que 'una sola vez' lo resuelvo en el consumidor con _efectos idempotentes_: la operación se diseña para que aplicarla dos veces sea equivalente a aplicarla una. Combino una _clave de deduplicación_ (por ejemplo, un `dedupKey` basado en el `eventId`) que persisto con una condición atómica en la base de datos. Lo crítico es evitar el _check-then-act_: mirar '¿existe la clave?' y luego insertar no es seguro si dos procesos leen a la vez; en cambio uso una condición atómica del tipo 'inserta solo si la clave no existe', o `attribute_not_exists`, para que la competición no duplique el efecto. Con at-least-once + esa idempotencia consigo _effectively once_: la semántica que el negocio necesita. Nunca dependo de que el broker entregue exactamente una vez."
 
 9. **Event Orchestrator vs coreografía: ¿cuál y por qué?**
 
    **Orientación:** Compara visibilidad/gobernanza contra desacoplamiento/red, y cuándo cada uno.
 
-   **Respuesta de un senior:** "La *coreografía* deja que cada servicio reaccione a eventos y publique los suyos, sin un coordinador: máximo desacoplamiento y evolución independiente, pero pierdes visibilidad central —no hay nadie que 'mire' el flujo completo— y si el flujo crece es difícil entender y depurar. La *orquestación* centraliza el flujo en un coordinador explícito (como un Step Functions): ganas visibilidad, gobernanza y retry centralizado, pero introduces acoplamiento al orquestador, que conoce todos los contratos y puede volverse cuello de botella o single point of failure. Elijo *orquestación* cuando el flujo es complejo, crítico y debo supervisarlo (pagos, provisioning), o cuando necesito estados explícitos y auditables; elijo *coreografía* cuando el acoplamiento entre equipos es indeseable, los contextos son independientes y la trazabilidad la compenso con buena observabilidad. No es mejor o peor: es dónde quieres poner la complejidad y quién necesita ver el flujo."
+   **Respuesta de un senior:** "La _coreografía_ deja que cada servicio reaccione a eventos y publique los suyos, sin un coordinador: máximo desacoplamiento y evolución independiente, pero pierdes visibilidad central —no hay nadie que 'mire' el flujo completo— y si el flujo crece es difícil entender y depurar. La _orquestación_ centraliza el flujo en un coordinador explícito (como un Step Functions): ganas visibilidad, gobernanza y retry centralizado, pero introduces acoplamiento al orquestador, que conoce todos los contratos y puede volverse cuello de botella o single point of failure. Elijo _orquestación_ cuando el flujo es complejo, crítico y debo supervisarlo (pagos, provisioning), o cuando necesito estados explícitos y auditables; elijo _coreografía_ cuando el acoplamiento entre equipos es indeseable, los contextos son independientes y la trazabilidad la compenso con buena observabilidad. No es mejor o peor: es dónde quieres poner la complejidad y quién necesita ver el flujo."
 
 10. **Diseña un esquema de evento de orden para millones de eventos/día.**
 
     **Orientación:** Buscan un JSON versionado, headers estándar, partition key = aggregateId y metadatos de trazabilidad.
 
-    **Respuesta de un senior:** "Diseñaría el evento con una envoltura y un payload versionados. En la *envoltura* (headers) pongo los metadatos estándar: `eventType` (o `type`), `version`, `source`, `subject` y los de trazabilidad `correlationId` y `traceId`. Uso `version: 1` en el tipo para poder evolucionar con backward compatibility. En el *payload* va el estado del negocio: los campos del pedido relevantes para los consumidores. La clave de partición la pongo en `orderId` (el `aggregateId`) para que todos los eventos de un mismo pedido queden en la misma partición y se garanticen el orden y la lectura coherente de esa entidad; otros consumidores que quieran por usuario usan un índice secundario. Añado metadatos de temporalidad (timestamp, el tiempo del negocio en vez del del broker). Con eventos pequños, idempotentes y versionados, el bus aguanta millones/día y cualquier consumidor puede reconstruir el estado del agregado de forma aislada."
+    **Respuesta de un senior:** "Diseñaría el evento con una envoltura y un payload versionados. En la _envoltura_ (headers) pongo los metadatos estándar: `eventType` (o `type`), `version`, `source`, `subject` y los de trazabilidad `correlationId` y `traceId`. Uso `version: 1` en el tipo para poder evolucionar con backward compatibility. En el _payload_ va el estado del negocio: los campos del pedido relevantes para los consumidores. La clave de partición la pongo en `orderId` (el `aggregateId`) para que todos los eventos de un mismo pedido queden en la misma partición y se garanticen el orden y la lectura coherente de esa entidad; otros consumidores que quieran por usuario usan un índice secundario. Añado metadatos de temporalidad (timestamp, el tiempo del negocio en vez del del broker). Con eventos pequños, idempotentes y versionados, el bus aguanta millones/día y cualquier consumidor puede reconstruir el estado del agregado de forma aislada."
 
 ---
 
@@ -483,4 +514,4 @@ Diseña la definición ASL (Amazon States Language) del Saga del Lab 1, con paso
 
 ---
 
-**Módulo 03 completado. Los detalles profundos de AWS Serverless (step functions, EventBridge configs) están en el Módulo 04. Lo mismo la consistencia se conecta con el Módulo 05 (DynamoDB, condicionales y transacciones distribuidas en la DB-side).**
+> _Los detalles profundos de AWS Serverless (step functions, EventBridge configs) están en el [**Módulo 04**](04-AWS-Serverless.md). Lo mismo la consistencia se conecta con el [**Módulo 05**](05-Bases-de-datos-distribuidas.md) (DynamoDB, condicionales y transacciones distribuidas en la DB-side)._
