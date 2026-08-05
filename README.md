@@ -29,7 +29,7 @@ Guía de estudio a nivel **Senior** para diseño de software en sistemas distrib
 | 07 | [Observabilidad](07-Observabilidad.md) (+ [Apéndice A](07-Observabilidad-Apendice-A.md)) | OpenTelemetry, Prometheus, Distributed Tracing, RUM, alerting SRE |
 | 08 | [Seguridad](08-Seguridad.md) (+ [Apéndice A](08-Seguridad-Apendice-A.md)) | OAuth 2.1, JWT, OpenID Connect, IAM, mejores prácticas |
 | 09 | [Diseño de APIs](09-Diseño-de-APIs.md) (+ [Apéndice A](09-Diseño-de-APIs-Apendice-A.md)) | REST, GraphQL, gRPC, Webhooks, versionado, idempotencia |
-| 10 | Escalabilidad y Resiliencia | Caching, Sharding, Replication, Circuit Breaker, Backpressure |
+| 10 | [Escalabilidad y Resiliencia](10-Escalabilidad-y-Resiliencia.md) (+ [Apéndice A](10-Escalabilidad-y-Resiliencia-Apendice-A.md)) | Caching, Sharding, Replication, Circuit Breaker, Backpressure |
 | 11 | Patrones de Diseño | GoF y patrones de arquitectura empresarial |
 | 12 | CI/CD moderno | GitHub Actions, estrategias de despliegue |
 | 13 | AI-Assisted Development | Copilot, Claude Code, Cursor, agentes |

@@ -122,12 +122,12 @@ Aunque los detalles de clases pertenecen a lenguajes específicos, estos princip
 5. **Abstracción:** manejar complejidad por niveles; `distancia = geo.haversine(a, b)` abstrae la matemática.
 6. **Fuente Única de Verdad (Single Source of Truth o SSOT):** cada dato tiene un lugar definitivo; la duplicación genera inconsistencia.
 7. **Principio Abierto/Cerrado (Open/Closed Principle o OCP):** abierto a extensión, cerrado a modificación (sin exagerar abstracciones — Módulo 11).
-8. **Principio de Inversión de Dependencias (Dependency Inversion Principle o DIP):** _"Los módulos de alto nivel no deben depender de los módulos de bajo nivel. Ambos deben depender de abstracciones (High-level modules should not depend on low-level modules. Both should depend on abstractions)."_ Base de Clean, Onion, Hexagonal y DDD. Las dependencias del dominio no tocan infraestructura; el dominio depende de abstracciones.
+8. **Principio de Inversión de Dependencias (Dependency Inversion Principle o DIP):** _"Los módulos de alto nivel no deben depender de los módulos de bajo nivel. Ambos deben depender de abstracciones (High-level modules should not depend on low-level modules. Both should depend on abstractions)"._ Base de Clean, Onion, Hexagonal y DDD. Las dependencias del dominio no tocan infraestructura; el dominio depende de abstracciones.
 9. **Principios Lean:** minimizar los _residuos (waste)_ — no construir features que no se usan, no añadir capas extra que solo crean ceremonia.
 
 SOLID detallado está en Módulo 11 y se usa intensivamente en Módulo 03 (Event Sourcing/CQRS), Módulo 04 (Serverless), Módulo 05 (Persistencia Distribuida), Módulo 10 (Patrones de Resiliencia) y Módulo 12 (CI/CD).
 
-### Pensamiento basado en componentes (Component-Based Thinking)
+### Pensamiento Basado en Componentes (Component-Based Thinking)
 
 Un arquitecto no "ve" el sistema a nivel de clases, sino a nivel de **componentes lógicos**: las funciones mayores de negocio (inventario, envíos, pagos), representadas típicamente como _leaf nodes_ de la estructura de directorios o namespaces. Identificar y granular estos componentes es la base para elegir estilo, y se hace **de forma iterativa**, no "perfecto a la primera".
 
@@ -137,7 +137,13 @@ Un arquitecto no "ve" el sistema a nivel de clases, sino a nivel de **componente
 - **Enfoque Actor/Action:** si hay varios actores, identifica las acciones principales de cada uno (cliente, operario, y el propio sistema como actor automático: billing, reposición de stock) y asigna componentes a esas acciones.
 - **Evita el Entity Trap (antipatrón):** no derives componentes de _entidades_ ("Customer Manager", "Order Manager"). Sufijos como `Manager`, `Controller`, `Handler`, `Engine`, `Processor` delatan componentes "cajón de sastre"; prefiere nombres por _rol_: `Validate Order` dice más que `Order Manager`.
 
-**El ciclo de refinamiento (feedback loop que nunca se detiene):** (1) identifica componentes iniciales; (2) asigna user stories a cada uno; (3) analiza roles y responsabilidades — conectores como "y", "además", "también" delatan un componente que hace demasiado y lo separan en piezas más finas; (4) analiza las **architecture characteristics** — si una parte exige escalabilidad y otra solo 2 usuarios concurrentes, o requieren distinta consistencia/disponibilidad, ese contraste justifica _partir_ componentes que una visión puramente funcional mantendría juntos; (5) **reestructura** continuamente, en colaboración con los desarrolladores.
+**El ciclo de refinamiento (feedback loop que nunca se detiene):**
+
+1. Identifica componentes iniciales.
+2. Asigna user stories a cada uno.
+3. Analiza roles y responsabilidades — conectores como "y", "además", "también" delatan un componente que hace demasiado y lo separan en piezas más finas.
+4. Analiza las **características de la arquitectura** — si una parte exige escalabilidad y otra solo 2 usuarios concurrentes, o requieren distinta consistencia/disponibilidad, ese contraste justifica _partir_ componentes que una visión puramente funcional mantendría juntos.
+5. **Reestructura** continuamente, en colaboración con los desarrolladores.
 
 > _Fuente: Richards & Ford, Fundamentals of Software Architecture (2nd ed.), Cap. 8, "Component-Based Thinking"._
 
