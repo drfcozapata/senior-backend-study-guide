@@ -4,7 +4,7 @@
 
 > Este módulo es el mapa inicial del libro. Los detalles de DynamoDB, Caching, Event-Driven, Serverless o IaC tendrán módulo propio (04–12). Aquí construimos el mapa de TODAS las arquitecturas y el framework de decisión que usarás en los 15 módulos restantes.
 
-**Mecanismos suplementarios de este módulo:** Fitness Functions, Contract Testing, estrategias de despliegue internas, ADRs, comparativa SQL/NoSQL aplicada a arquitectura y testing piramidal se cubren en el **Apéndice A** (`appends/01-Arquitectura-de-Software-Moderna-Apendice-A.md`), enlazado al final.
+**Mecanismos suplementarios de este módulo:** Fitness Functions, Contract Testing, estrategias de despliegue internas, ADRs, comparativa SQL/NoSQL aplicada a arquitectura y testing piramidal se cubren en el [**Apéndice A**](appends/01-Arquitectura-de-Software-Moderna-Apendice-A.md).
 
 ---
 
@@ -57,8 +57,10 @@ Son ocho premisas falsas que causan _bugs y outages_ incontables. Llévalas al f
 
 Cada una se corrige con patrones de esta guía: Descubrimiento de Servicios (service discovery - Módulo 02), Reintentos/Idempotencia (retries/idempotencia - Módulo 03), Configuración como Código (Configuration as Code - Módulo 06), Trazabilidad Distribuida o Rastreo Distribuido (distributed tracing - Módulo 07), Cifrado y Autenticación/Autorización (encryption/auth - Módulo 08), Control de Frecuencia (rate limiting - Módulo 09), Cortacircuitos (circuit breakers - Módulo 10).
 
-**El matiz del Diseño de Aplicaciones mediante el uso Intensivo de Datos (Designing Data-Intensive Applications o DDIA):** más allá de las 8 falacias, la mayoría de los fallos distribuidos se reduce a **tres fuentes recurrentes de problemas**: (1) **red no fiable**, (2) **relojes no fiables** y (3) **pausas de proceso**. Si no recibes respuesta de un nodo, es **imposible distinguir** si se perdió la petición, si el nodo cayó o si se perdió la respuesta; la red y los timeouts tienen _retrasos no acotados_ (un paquete puede tardar minutos), así que un timeout corto provoca falsos positivos y uno largo, esperas largas. Peor aún, un nodo **puede pausarse** (un GC "stop-the-world", una VM suspendida, un SIGSTOP, un page fault) durante segundos sin que su programa lo note: el resto del mundo puede declararlo muerto, y al despertar sigue actuando como líder o lock-holder con datos ya obsoletos. Por eso el reloj de pared no es fiable y se usan relojes monotónicos, concesiones (leases) y tokens de delimitación (fencing tokens). Exigir que el software funcione asumiendo estas tres cosas es lo que espera una entrevista senior de sistemas distribuidos.
-
+> **El matiz del Diseño de Aplicaciones mediante el uso Intensivo de Datos (Designing Data-Intensive Applications o DDIA)**
+>
+> Más allá de las 8 falacias, la mayoría de los fallos distribuidos se reduce a **tres fuentes recurrentes de problemas**: (1) **red no fiable**, (2) **relojes no fiables** y (3) **pausas de proceso**. Si no recibes respuesta de un nodo, es **imposible distinguir** si se perdió la petición, si el nodo cayó o si se perdió la respuesta; la red y los timeouts tienen _retrasos no acotados_ (un paquete puede tardar minutos), así que un timeout corto provoca falsos positivos y uno largo, esperas largas. Peor aún, un nodo **puede pausarse** (un GC "stop-the-world", una VM suspendida, un SIGSTOP, un page fault) durante segundos sin que su programa lo note: el resto del mundo puede declararlo muerto, y al despertar sigue actuando como líder o lock-holder con datos ya obsoletos. Por eso el reloj de pared no es fiable y se usan relojes monotónicos, concesiones (leases) y tokens de delimitación (fencing tokens). Exigir que el software funcione asumiendo estas tres cosas es lo que espera una entrevista senior de sistemas distribuidos.
+>
 > _Fuente: DDIA, Cap. 9, §§ "Unreliable Networks", "Unreliable Clocks / Process Pauses", "Distributed Locks and Leases"._
 
 ### Atributos de Calidad (Quality Attributes / "-ilities")
@@ -77,10 +79,10 @@ No se habla de "código bonito". Se habla de satisfacer requisitos que stakehold
 | **Observability**                   | Entender estado interno desde las salidas (outputs)            | MTTD (Mean Time To Detect), tiempo de investigación de incidentes, cardinalidad de métricas                                                           | Observabilidad detallada vs costo de almacenamiento y muestreo (sampling) |
 | **Deployability / Releasability**   | Rapidez y seguridad de despliegue                              | Frecuencia de deploys, tiempo de entrega para los cambios (lead time for changes), tasa de fallos en los cambios (change failure rate) (DORA metrics) | Despliegue rápido vs rigor de validación                                  |
 
-#### Matiz senior: la amplificación de la cola (tail latency amplification)
-
-Un SLO de latencia no se mide con el promedio ni con p50: lo que degrada la experiencia real son los percentiles altos (p95, p99), conocidos como **tail latency**. El matiz que separa a un senior es entender la **amplificación de la cola**: cuando una petición dispara N llamadas internas (aunque sean en paralelo), el usuario espera por la **más lenta** de todas — basta UNA llamada lenta para que toda la petición sea lenta. Aunque solo un pequeño % de llamadas internas sea lento, la probabilidad de que una request toque al menos una llamada lenta crece con el número de llamadas que exige, de modo que la proporción de requests lentos se multiplica. Por eso importa más optimizar p99/p999 que la mediana, y por qué _promediar percentiles_ entre máquinas o a lo largo del tiempo es matemáticamente sin sentido: lo correcto es **agregar histogramas**, no medias.
-
+> #### Matiz senior: la amplificación de la latencia de cola (tail latency amplification)
+>
+> Un SLO (Objetivo de Nivel de Servicio) de latencia no se mide con el promedio ni con p50: lo que degrada la experiencia real son los percentiles altos (p95, p99), conocidos como **tail latency** (latencia de cola). El matiz que separa a un senior es entender la **amplificación de la latencia de cola**: cuando una petición dispara N llamadas internas (aunque sean en paralelo), el usuario espera por la más lenta de todas — basta UNA llamada lenta para que toda la petición sea lenta. Aunque solo un pequeño % de llamadas internas sea lento, la probabilidad de que una request toque al menos una llamada lenta crece con el número de llamadas que exige, de modo que la proporción de requests lentos se multiplica. Por eso los percentiles altos son los que hay que vigilar en sistemas con fan-out — aunque elegir cuántos "nueves" perseguir es una decisión de costo-beneficio, no una maximización ciega. Y por esa misma razón, _promediar percentiles_ entre máquinas o a lo largo del tiempo es matemáticamente sin sentido: lo correcto es agregar histogramas, no medias.
+>
 > _Fuente: DDIA (Designing Data-Intensive Applications, Kleppmann), Cap. 2, "Use of Response Time Metrics"._
 
 #### La compensación (trade-off) fundamental: los Atributos de Calidad no son gratuitos
@@ -93,8 +95,8 @@ Ya veremos hasta el extremo de "escalabilidad imposible" en sistemas extremos. L
 
 **Formación en empresas top:** Amazon, Netflix o Stripe no te preguntarán "¿sabes definir Availability?" sino "¿Dónde fallarías si le dieras a tus usuarios 99.9% pero tu base de datos está en una sola región?" o "Si un pago falla, ¿cómo comunicas el fallo a otro servicio causando idempotencia principal?". Eso es arquitectura moderna: pensar los trade-offs de RIESGO.
 
-**Dato senior (DORA):** el desacoplamiento y la desplegabilidad de la arquitectura son el **factor que más predice la velocidad y fiabilidad de entrega** (State of DevOps 2017: _"architecture was the largest contributor to continuous delivery"_). Un arquitecto no diseña solo para escala o mantenibilidad, sino **para que los equipos puedan testear, desplegar y revertir de forma independiente y segura**. Si la arquitectura permite _small changes_ que se despliegan solos sin coordinación global, obtienes velocidad y fiabilidad; si es un monolito sobreacoplado, cada cambio acarrea _global failures_ y coordinación de días. Migra de forma **incremental** (patrón _strangler fig_): no existe una arquitectura perfecta para todo producto y escala.
-
+> **Dato senior (DORA):** el desacoplamiento y la desplegabilidad de la arquitectura son el **factor que más predice la velocidad y fiabilidad de entrega** (State of DevOps 2017: _"architecture was the largest contributor to continuous delivery"_). Un arquitecto no diseña solo para escala o mantenibilidad, sino **para que los equipos puedan testear, desplegar y revertir de forma independiente y segura**. Si la arquitectura permite _small changes_ que se despliegan solos sin coordinación global, obtienes velocidad y fiabilidad; si es un monolito sobreacoplado, cada cambio acarrea _global failures_ y coordinación de días. Migra de forma **incremental** (patrón _strangler fig_): no existe una arquitectura perfecta para todo producto y escala.
+>
 > _Fuente: The DevOps Handbook (Kim, Humble, Debois, Willis, Forsgren), Cap. 13, "Architect for Low-risk Releases" (con la cita de DORA 2017)._
 
 #### El lente que añade la IA generativa a los trade-offs (avance Módulo 13)
@@ -129,7 +131,7 @@ SOLID detallado está en Módulo 11 y se usa intensivamente en Módulo 03 (Event
 
 ### Pensamiento Basado en Componentes (Component-Based Thinking)
 
-Un arquitecto no "ve" el sistema a nivel de clases, sino a nivel de **componentes lógicos**: las funciones mayores de negocio (inventario, envíos, pagos), representadas típicamente como _leaf nodes_ de la estructura de directorios o namespaces. Identificar y granular estos componentes es la base para elegir estilo, y se hace **de forma iterativa**, no "perfecto a la primera".
+Un arquitecto no "ve" el sistema a nivel de clases, sino a nivel de **componentes lógicos**: las funciones mayores de negocio (inventario, envíos, pagos), representadas típicamente como _leaf nodes_ (nodos hoja o nodos terminales) de la estructura de directorios o namespaces. Identificar y granular estos componentes es la base para elegir estilo, y se hace **de forma iterativa**, no "perfecto a la primera".
 
 **Cómo identificar los componentes iniciales:**
 
